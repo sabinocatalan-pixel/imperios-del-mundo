@@ -1,0 +1,16 @@
+{
+  "name": "Imperios del Mundo",
+  "short_name": "Imperios",
+  "description": "Juego de gran estrategia por turnos con batallas en vivo.",
+  "start_url": "./imperios.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B1D26",
+  "theme_color": "#0B1D26",
+  "lang": "es",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
