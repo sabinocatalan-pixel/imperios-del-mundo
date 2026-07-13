@@ -1,5 +1,6 @@
 /* ==================== 01-config-audio.js ====================
    Ajustes globales (SET), audio procedural y música procedural. */
+"use strict";
 /* ==================== AJUSTES GLOBALES ==================== */
 const SET={sound:true,music:true,vol:0.6,speed:1,fx:true};
 const reduced=(typeof matchMedia==="function")?matchMedia("(prefers-reduced-motion: reduce)").matches:false;
