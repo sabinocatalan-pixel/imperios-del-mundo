@@ -34,12 +34,16 @@ function build() {
 function copyPwaAssets() {
   fs.copyFileSync(path.join(SRC_DIR, "manifest.webmanifest"), path.join(DIST_DIR, "manifest.webmanifest"));
   fs.copyFileSync(path.join(SRC_DIR, "sw.js"), path.join(DIST_DIR, "sw.js"));
+  // Redirección de conveniencia para hosts (p. ej. GitHub Pages) que sirven
+  // dist/ bajo un subdirectorio del repo: la raíz "/" cae en index.html,
+  // que reenvía a imperios.html (el artefacto final sigue siendo ese).
+  fs.copyFileSync(path.join(SRC_DIR, "redirect.html"), path.join(DIST_DIR, "index.html"));
   const iconsOut = path.join(DIST_DIR, "icons");
   fs.mkdirSync(iconsOut, { recursive: true });
   for (const f of fs.readdirSync(path.join(SRC_DIR, "icons"))) {
     fs.copyFileSync(path.join(SRC_DIR, "icons", f), path.join(iconsOut, f));
   }
-  console.log("Copiados assets PWA: manifest.webmanifest, sw.js, icons/.");
+  console.log("Copiados assets PWA: manifest.webmanifest, sw.js, index.html (redirect), icons/.");
 }
 
 build();
