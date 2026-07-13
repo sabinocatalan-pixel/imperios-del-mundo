@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Imperios del Mundo IV</title>
+<style>
+<!--INJECT:css-->
+</style>
+</head>
+<body>
+<header>
+  <button class="icobtn" id="btnMissions" title="Misiones">🎯</button>
+  <div class="htitle"><h1>Imperios del Mundo <span>IV</span></h1></div>
+  <button class="icobtn" id="btnSettings" title="Ajustes">⚙️</button>
+</header>
+
+<div id="resbar"></div>
+<div id="status"></div>
+<div id="mapwrap"><svg id="map" viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div id="zoomCtl">
+    <button id="zIn" aria-label="Acercar">＋</button>
+    <button id="zOut" aria-label="Alejar">－</button>
+    <button id="zReset" aria-label="Restablecer">⤾</button>
+  </div>
+</div>
+
+<div id="panels">
+  <div class="panel"><h3 id="terrTitle">Territorio</h3><div id="terrInfo">Selecciona un territorio.</div><div class="btns" id="terrBtns"></div></div>
+  <div class="panel"><h3>Imperio · Mejoras</h3><div id="empInfo"></div><div class="btns" id="empBtns"></div></div>
+</div>
+
+<div id="log"></div>
+
+<!-- Modal fin de juego -->
+<div class="modal" id="overlay">
+  <div class="card" style="text-align:center">
+    <h2 id="ovTitle"></h2><p id="ovText"></p>
+    <p style="font-size:12px;opacity:.8">🏆 Copia tu <b>código de legado</b> para conservar desbloqueos:</p>
+    <textarea id="ovLeg" readonly style="width:100%;min-height:52px;background:#09161d;color:#E8DCC0;border:1px solid #2A4A57;border-radius:6px;padding:6px;font-size:16px;font-family:monospace"></textarea>
+    <div class="btns" style="justify-content:center">
+      <button class="act" id="ovCopy">Copiar legado</button>
+      <button class="act gold" onclick="reset()">Jugar de nuevo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal inicio: modo de juego -->
+<div class="modal" id="startModal">
+  <div class="card" style="text-align:center">
+    <h2>Imperios <span>del Mundo</span> IV</h2>
+    <p id="legacySummary" style="opacity:.85"></p>
+    <p><b>Modo:</b></p>
+    <div class="btns" style="justify-content:center;margin-bottom:8px">
+      <button class="act gold" id="mode1" onclick="setPickMode(1)">👤 1 Jugador</button>
+      <button class="act" id="mode2" onclick="setPickMode(2)">👥 2 Jugadores</button>
+    </div>
+    <p><b>Partida libre</b> — elige la dificultad:</p>
+    <div class="btns" style="justify-content:center">
+      <button class="act" onclick="startGame(0.7)">🟢 Fácil</button>
+      <button class="act gold" onclick="startGame(1.0)">🟡 Normal</button>
+      <button class="act danger" onclick="startGame(1.3)">🔴 Difícil</button>
+    </div>
+    <p style="margin-top:16px"><b>🏆 Campaña</b> — escenarios con objetivos:</p>
+    <div id="scenList" style="text-align:left"></div>
+    <p style="margin-top:10px;opacity:.7;font-size:12px">🗡 vence a 🏹 · 🏹 vence a 🛡 · 🛡 vence a 🗡<br>
+    En el mapa: pellizca o usa ＋/－ para acercar.</p>
+  </div>
+</div>
+
+<!-- Modal ajustes -->
+<div class="modal" id="setModal">
+  <div class="card">
+    <h2>Ajustes</h2>
+    <div class="mrow"><label style="margin:0">🔊 Sonido</label><button class="act" id="setSnd">Activado</button></div>
+    <div class="mrow"><label style="margin:0">🎵 Música</label><button class="act" id="setMus">Activada</button></div>
+    <label>Volumen<input type="range" id="setVol" min="0" max="100" value="60"></label>
+    <div class="mrow"><label style="margin:0">⚡ Velocidad de batalla</label><button class="act" id="setSpd">×1</button></div>
+    <div class="mrow"><label style="margin:0">✨ Efectos visuales</label><button class="act" id="setFx">Completos</button></div>
+    <label style="margin-top:6px"><b>💾 Guardar partida</b> — copia este código y guárdalo (WhatsApp, Notas):</label>
+    <textarea id="saveCode" readonly></textarea>
+    <div class="btns"><button class="act gold" id="btnGenSave">Generar código</button>
+      <button class="act" id="btnCopySave">Copiar</button></div>
+    <label style="margin-top:10px"><b>📥 Cargar partida</b> — pega tu código aquí:</label>
+    <textarea id="loadCode" placeholder="Pega el código..."></textarea>
+    <label style="margin-top:10px"><b>🏆 Legado</b> — tu progreso permanente (victorias, desbloqueos). Guárdalo aparte:</label>
+    <textarea id="legCode"></textarea>
+    <div class="btns"><button class="act gold" id="btnGenLeg">Generar legado</button>
+      <button class="act" id="btnLoadLeg">Cargar legado</button></div>
+    <div class="btns"><button class="act gold" id="btnLoad">Cargar</button>
+      <button class="act danger" onclick="reset()">Reiniciar juego</button>
+      <button class="act" onclick="closeModals()">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Modal oferta diplomática -->
+<div class="modal" id="diploModal">
+  <div class="card" style="text-align:center">
+    <h2 id="dipTitle"></h2><p id="dipText"></p>
+    <div class="btns" style="justify-content:center">
+      <button class="act gold" onclick="resolveOffer(true)">Aceptar</button>
+      <button class="act danger" onclick="resolveOffer(false)">Rechazar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal misiones -->
+<div class="modal" id="misModal">
+  <div class="card">
+    <h2>🎯 Misiones</h2>
+    <div id="misList"></div>
+    <div class="btns" style="justify-content:center"><button class="act" onclick="closeModals()">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- ESCENA DE BATALLA -->
+<div id="battle">
+  <div id="bhead">
+    <div class="side"><span id="bnameP">Tú</span><div class="hpbar" id="bhpP"><i style="width:100%"></i></div></div>
+    <div id="btitle">Batalla</div>
+    <div class="side" style="text-align:right"><span id="bnameE">Enemigo</span><div class="hpbar" id="bhpE"><i style="width:100%"></i></div></div>
+  </div>
+  <div id="btop2"><span id="bgold">🪙 0</span><span id="bmode" style="opacity:.7"></span></div>
+  <div id="bcvwrap"><canvas id="bcv" width="960" height="320"></canvas></div>
+  <div id="bbtns"></div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+<!--INJECT:js-->
+</script>
+</body>
+</html>
