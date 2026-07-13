@@ -79,6 +79,7 @@ function checkEnd(){
 function endGame(title,text,won=true,winner=null){
   phase="over";
   if(won&&!scenario&&humans.length===1)LEGACY.wins++;
+  autoSaveLegacy();
   $("ovTitle").textContent=title;$("ovText").textContent=text;
   $("ovLeg").value=legacyCode();
   $("overlay").style.display="flex";

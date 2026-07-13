@@ -3,6 +3,7 @@
 /* ==================== TURNOS ==================== */
 function startPlayerTurn(){startRound();} // alias para compatibilidad
 function startRound(){
+  autoSaveGame();
   incomePhase();
   if(checkEnd())return;
   checkScenario();if(phase==="over")return;

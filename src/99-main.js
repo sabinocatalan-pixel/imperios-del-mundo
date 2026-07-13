@@ -2,3 +2,4 @@
    Arranque del juego. */
 buildMap();
 reset();
+tryAutoLoad();
