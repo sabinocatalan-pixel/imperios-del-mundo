@@ -28,7 +28,7 @@ function stubCanvas(window) {
   };
 }
 
-function makeGame() {
+function makeGame(opts = {}) {
   const errors = [];
   const dom = new JSDOM(HTML, {
     runScripts: "dangerously",
@@ -38,6 +38,10 @@ function makeGame() {
     beforeParse(window) {
       window.matchMedia = () => ({ matches: false });
       stubCanvas(window);
+      // Sembrar localStorage ANTES de que corra el <script> del documento,
+      // para que tryAutoLoad() (99-main.js) lo encuentre al arrancar.
+      if (opts.seedAutosave) window.localStorage.setItem("imperiosAutosave", opts.seedAutosave);
+      if (opts.seedLegacy) window.localStorage.setItem("imperiosLegado", opts.seedLegacy);
     }
   });
   dom.window.addEventListener("error", e => errors.push(e.error || e.message || e));
@@ -212,6 +216,38 @@ test("Diplomacia: exigencia de tributo se muestra y se resuelve", async () => {
     assert.strictEqual(g.win.eval("F[player].gold"), goldPlayerBefore - 20);
     assert.strictEqual(g.win.eval("F.CO.gold"), goldCoBefore + 20);
     assert.ok(g.win.eval('relGet("CO",player)') > 0);
+  } finally { closeGame(g); }
+});
+
+/* 9 (Fase 1). PWA: startRound() autoguarda en localStorage y tryAutoLoad()
+   restaura esa partida al arrancar una página nueva. */
+test("PWA: autoguardado por ronda y restauración automática al reabrir", async () => {
+  const g1 = makeGame();
+  let code;
+  try {
+    g1.win.eval('startGame(1.0)');
+    g1.win.eval('clickTerr("CAN")');
+    code = g1.win.eval("localStorage.getItem('imperiosAutosave')");
+    assert.ok(code, "startRound() debe autoguardar en localStorage");
+  } finally { closeGame(g1); }
+
+  const g2 = makeGame({ seedAutosave: code });
+  try {
+    assert.strictEqual(g2.win.eval("phase"), "play");
+    assert.strictEqual(g2.win.eval("player"), "AG");
+  } finally { closeGame(g2); }
+});
+
+/* 10 (Fase 1). PWA: endGame() autoguarda el código de legado en localStorage. */
+test("PWA: autoguardado del legado al terminar la partida", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('endGame("¡Victoria!","fin de prueba",true,player)');
+    const saved = g.win.eval("localStorage.getItem('imperiosLegado')");
+    assert.ok(saved);
+    assert.strictEqual(saved, g.win.eval("legacyCode()"));
   } finally { closeGame(g); }
 });
 
