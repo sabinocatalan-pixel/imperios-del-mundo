@@ -1,14 +1,13 @@
 /* ==================== 03-legado-campania.js ====================
    LEGACY (progresión permanente) y SCENARIOS (campaña).
    legacyCode/loadLegacy viven en 10-guardado.js. */
-const LEGACY={wins:0,scen:{},champsX:false};
-const EXTRA_CHAMPS=["Alejandro Magno","Túpac Amaru II","Napoleón","Trajano","Tomoe Gozen","Shaka Zulú"];
+const LEGACY={wins:0,scen:{},heroes:{}};
 function legacyDesc(){
   const b=[];
-  if(LEGACY.wins>=1)b.push("⭐ Campeones legendarios desbloqueados");
   if(LEGACY.wins>=2)b.push("🪙 +20 de oro inicial");
-  if(LEGACY.wins>=3)b.push("⚔️ Campeón inicia con arma nv2");
+  if(LEGACY.wins>=3)b.push("⚔️ Héroe activo inicia con arma nv2");
   if(LEGACY.wins>=5)b.push("💰 Economía nv1 inicial");
+  if(LEGACY.heroes&&LEGACY.heroes.amaru)b.push("⭐ Amaru desbloqueado");
   return b;
 }
 function renderLegacy(){

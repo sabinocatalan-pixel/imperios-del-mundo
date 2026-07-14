@@ -54,7 +54,6 @@ const CONTINENTS={
 const ERAS=["É. Antigua","É. Medieval","É. Industrial","É. Moderna"];
 const ERA_COST=[0,35,80,150];
 const RESICON={oro:"🪙",comida:"🌾",ciencia:"🔬",fe:"✨"};
-const CHAMPS=["Atahualpa","Aníbal","Juana de Arco","Gengis Kan","Leónidas","Cleopatra","Pachacútec","Saladino","Sun Tzu","Boudica"];
 const SPECIALS=["☄️ Lluvia de meteoros","🔥 Flechas de fuego","💣 Bombardeo","✈️ Ataque aéreo"];
 const UNIT_NAMES=[
   {melee:"Guerrero",ranged:"Hondero",heavy:"Mamut"},

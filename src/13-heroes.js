@@ -224,7 +224,11 @@ function panteonCardClick(id) {
     const f = F[panteonFac];
     const slot = f.heroes.indexOf(id);
     if (slot >= 0) { setHeroSlot(panteonFac, slot, null); SFX.click(); renderPanteon(); render(); return; }
-    if (!f.heroes[0]) { setHeroSlot(panteonFac, 0, id); SFX.win(); renderPanteon(); render(); return; }
+    if (!f.heroes[0]) {
+      setHeroSlot(panteonFac, 0, id); SFX.win();
+      if (panteonFac === player) { completeMission("champ"); log(`⭐ ${ALL_HEROES[id].name} se une a tu imperio como héroe activo.`, "win"); }
+      renderPanteon(); render(); return;
+    }
     const freeSlot = f.heroes.indexOf(null, 1) >= 1 ? f.heroes.indexOf(null, 1) : (f.heroes[1] ? (f.heroes[2] ? -1 : 2) : 1);
     if (freeSlot >= 1) { setHeroSlot(panteonFac, freeSlot, id); SFX.win(); renderPanteon(); render(); }
     else setStatus("Ya tienes 3 héroes equipados: quita uno antes de añadir otro.");

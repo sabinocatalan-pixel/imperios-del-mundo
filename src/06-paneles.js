@@ -84,10 +84,13 @@ function renderEmp(){
     const c=CONTINENTS[cn];
     if(c.ids.every(id=>T[id].owner===player))contHtml+=`<div class="row" style="color:var(--gold)">🌍 ${cn} completo: +${c.bonus}🪙/ronda</div>`;
   }
+  const activeHero=f.heroes[0]?ALL_HEROES[f.heroes[0]]:null;
+  const councilNames=[f.heroes[1],f.heroes[2]].filter(Boolean).map(id=>ALL_HEROES[id].name).join(", ");
   info.innerHTML=
    `<div class="row"><span><b>${FACTIONS[player].name}</b></span><span>${FACTIONS[player].rel}</span></div>
     <div class="row"><span>Territorios: ${own.length}/21</span>
-      <span>${f.champ?("⭐ "+f.champ+" (arma nv"+f.champW+")"):"Sin campeón"}</span></div>
+      <span>${activeHero?("⭐ "+activeHero.name+" (arma nv"+f.heroWeaponLv+")"):"Sin héroe activo"}</span></div>
+    ${councilNames?`<div class="row" style="opacity:.75">Consejo: ${councilNames}</div>`:""}
     <div class="row" style="opacity:.75">⚔️ Armamento nv${f.upArm} · 💰 Economía nv${f.upEco} · 🏥 Medicina nv${f.upMed}</div>
     ${contHtml}
     <div class="row" style="opacity:.7">Victoria: conquista total · 🎭${CULT_WIN} · ✨${FAITH_WIN}</div>`;
@@ -107,15 +110,11 @@ function renderEmp(){
     btns.appendChild(mkBtn(`${n} nv${f[k]+1} (${c}🪙)`,()=>{f.gold-=c;f[k]++;SFX.coin();
       log(`${n} → nivel ${f[k]} (${d}).`);render();},f.gold<c));
   }
-  if(!f.champ){
-    btns.appendChild(mkBtn("Contratar campeón (60🪙)",()=>{f.gold-=60;
-      const pool=LEGACY.wins>=1?CHAMPS.concat(EXTRA_CHAMPS):CHAMPS;
-      f.champ=pool[Math.floor(Math.random()*pool.length)];completeMission("champ");SFX.win();
-      log(`⭐ ${f.champ} se une a tu imperio.`,"win");render();},f.gold<60,"gold"));
-  }else if(f.champW<3){
-    const c=40+f.champW*20;
-    btns.appendChild(mkBtn(`Arma del campeón nv${f.champW+1} (${c}🪙)`,()=>{f.gold-=c;f.champW++;
-      SFX.evolve();log(`⭐ ${f.champ} recibió armamento nivel ${f.champW}.`);render();},f.gold<c,"gold"));
+  btns.appendChild(mkBtn("⭐ Equipar héroes",()=>{SFX.click();openPanteon("equipar",player);}));
+  if(activeHero&&f.heroWeaponLv<3){
+    const c=40+f.heroWeaponLv*20;
+    btns.appendChild(mkBtn(`Arma del héroe nv${f.heroWeaponLv+1} (${c}🪙)`,()=>{f.gold-=c;f.heroWeaponLv++;
+      SFX.evolve();log(`⭐ ${activeHero.name} recibió armamento nivel ${f.heroWeaponLv}.`);render();},f.gold<c,"gold"));
   }
   btns.appendChild(mkBtn("Terminar turno",endHumanTurn));
 }
