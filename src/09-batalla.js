@@ -67,6 +67,14 @@ function counterMult(att,def){
   if(COUNTER[def.kind]===att.kind)return 0.66;
   return 1;
 }
+// Reducción de daño recibido por pasivas/activas de héroes (Leónidas, Pachacútec).
+function dmgTakenMult(tgt){
+  const S=B.S[String(tgt.side)],f=F[S.fac],heroId=f.heroes[0];
+  let mult=1;
+  if(S.defBuffT>0)mult*=0.9; // Pachacútec: Reorganización Imperial (10s)
+  if(heroId==="leonidas"&&S.champAlive&&tgt.kind==="melee")mult*=0.9; // Muro de Escudos
+  return mult;
+}
 
 function openBattle(from,to,mode){
   inBattle=true;selected=null;
@@ -84,10 +92,12 @@ function openBattle(from,to,mode){
     last:performance.now(),
     S:{
       "1":{fac:pFacId,gold:80,income:9+pFac.upEco*1.4,
-        cool:{melee:0,ranged:0,heavy:0,champ:0,spec:0},champAlive:false},
+        cool:{melee:0,ranged:0,heavy:0,champ:0,spec:0,heroAbil:0},champAlive:false,
+        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false},
       "-1":{fac:eFacId,gold:pvp?80:60,
         income:pvp?(9+eFac.upEco*1.4):(8+eFac.era*1.2)*diffMult,
-        cool:{melee:0,ranged:0,heavy:0,champ:pvp?0:20,spec:pvp?0:26},champAlive:false}
+        cool:{melee:0,ranged:0,heavy:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20},champAlive:false,
+        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false}
     },
     eCool:0,turretT:0
   };
@@ -112,15 +122,48 @@ function openBattle(from,to,mode){
 function spawnUnit(side,kind){
   const P=B.S[side],f=F[P.fac];
   const st=unitStats(kind,f.era,f.upArm);
-  if(B.over||P.gold<st.cost||P.cool[kind]>0)return;
-  P.gold-=st.cost;P.cool[kind]=st.cd;SFX.spawn();
+  let cost=st.cost;
+  if(f.heroes[0]==="suntzu"&&P.champAlive)cost=Math.round(cost*0.9); // Sun Tzu: -10% costo mientras vive
+  if(B.over||P.gold<cost||P.cool[kind]>0)return;
+  P.gold-=cost;P.cool[kind]=st.cd;SFX.spawn();
   B.units.push(mkUnit(+side,kind,f.era,f.upArm));
 }
 function spawnChamp(side){
   const P=B.S[side],f=F[P.fac];
-  if(B.over||!f.champ||P.champAlive||P.cool.champ>0)return;
+  const heroId=f.heroes[0];
+  if(B.over||!heroId||P.champAlive||P.cool.champ>0)return;
   P.cool.champ=60;P.champAlive=true;SFX.evolve();
-  B.units.push(mkUnit(+side,"champ",f.era,0,f.champW));
+  const u=mkUnit(+side,"champ",f.era,0,f.heroWeaponLv);
+  u.heroId=heroId;
+  if(heroArmaAltActiva(P.fac,heroId)){ // arma alternativa desbloqueada (logro por partida)
+    if(heroId==="leonidas")u.rng+=30;
+    else if(heroId==="anibal")u.rng=120;
+    else if(heroId==="tomoegozen")u.rng=100;
+  }
+  B.units.push(u);
+}
+function useHeroAbility(side){
+  const P=B.S[side],f=F[P.fac],heroId=f.heroes[0],hero=heroId&&HEROES[heroId];
+  if(B.over||!hero||!hero.habilidad||hero.habilidad.tipo!=="activa")return;
+  if(!P.champAlive||P.cool.heroAbil>0)return;
+  P.cool.heroAbil=hero.habilidad.cd;SFX.evolve();
+  const allies=B.units.filter(u=>u.side===(+side));
+  if(heroId==="boudica"){
+    P.spdBuffT=6;
+    B.dmgs.push({x:W/2,y:GROUND-140,txt:"⚡ ¡Carga Furiosa!",t:1.2,c:"#FFD866"});
+  }else if(heroId==="anibal"){
+    const fx=(+side)===1?W*0.35:W*0.65;
+    for(let i=0;i<2;i++){
+      const u=mkUnit(+side,"melee",f.era,f.upArm);
+      u.x=fx+(i-0.5)*24;
+      B.units.push(u);
+    }
+    B.dmgs.push({x:W/2,y:GROUND-140,txt:"🛡 ¡Flanqueo!",t:1.2,c:"#FFD866"});
+  }else if(heroId==="pachacutec"){
+    for(const u of allies)u.hp=Math.min(u.max,u.hp+u.max*0.25);
+    P.defBuffT=10;
+    B.dmgs.push({x:W/2,y:GROUND-140,txt:"✨ ¡Reorganización Imperial!",t:1.2,c:"#7ED66E"});
+  }
 }
 function useSpecial(side){
   const P=B.S[side],f=F[P.fac];
@@ -128,8 +171,9 @@ function useSpecial(side){
   P.cool.spec=side==="-1"&&!B.pvp?32:30;
   if(side==="1"&&humans.length===1)completeMission("spec");
   const dmg=55*(f.era+1),foe=-(+side);
-  for(const u of B.units)if(u.side===foe){u.hp-=dmg;u.flash=0.2;
-    B.dmgs.push({x:u.x,y:GROUND-50,txt:Math.round(dmg),t:0.7,c:"#FFD866"});}
+  for(const u of B.units)if(u.side===foe){
+    const dm=dmg*dmgTakenMult(u);u.hp-=dm;u.flash=0.2;
+    B.dmgs.push({x:u.x,y:GROUND-50,txt:Math.round(dm),t:0.7,c:"#FFD866"});}
   B.shake=SET.fx?14:0;B.freeze=0.08;SFX.boom();
   if(side==="-1")B.dmgs.push({x:W/2,y:GROUND-140,txt:"⚠️ ¡"+SPECIALS[f.era]+" enemigo!",t:1.4,c:"#FF7A66"});
   for(let i=0;i<(SET.fx?26:8);i++)B.pufs.push({x:200+Math.random()*560,y:GROUND-Math.random()*120,
@@ -154,12 +198,20 @@ function buildBattleButtons(){
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:k});
     }
-    if(f.champ){
+    const heroId=f.heroes[0],hero=heroId&&ALL_HEROES[heroId];
+    if(hero){
       const b=document.createElement("button");b.className="ub gold";
-      b.innerHTML=`⭐ ${f.champ}<small>élite · 60s</small><div class="cdo"></div>`;
+      b.innerHTML=`⭐ ${hero.name}<small>héroe · 60s</small><div class="cdo"></div>`;
       b.onclick=()=>spawnChamp(side);
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:"champ"});
+      if(hero.habilidad&&hero.habilidad.tipo==="activa"){
+        const ab=document.createElement("button");ab.className="ub gold";
+        ab.innerHTML=`${hero.habilidad.nombre}<small>${hero.habilidad.cd}s</small><div class="cdo"></div>`;
+        ab.onclick=()=>useHeroAbility(side);
+        box.appendChild(ab);
+        B.btnRefs.push({el:ab,cd:ab.lastElementChild,side,kind:"heroAbil"});
+      }
     }
     const sp=document.createElement("button");sp.className="ub danger";
     sp.innerHTML=`${SPECIALS[f.era]}<small>gratis · 30s</small><div class="cdo"></div>`;
@@ -179,8 +231,12 @@ function enemyAI(dt){
   B.eCool-=dt;
   // especial de la IA cuando el jugador acumula ejército
   if(P.cool.spec<=0&&B.units.filter(u=>u.side===1).length>=3)useSpecial("-1");
-  // campeón de la IA si su imperio lo tiene
-  if(eF.champ&&!P.champAlive&&P.cool.champ<=0&&B.time>12)spawnChamp("-1");
+  // héroe de la IA si su imperio tiene uno equipado
+  if(eF.heroes[0]&&!P.champAlive&&P.cool.champ<=0&&B.time>12)spawnChamp("-1");
+  if(P.champAlive&&P.cool.heroAbil<=0){
+    const hero=ALL_HEROES[eF.heroes[0]];
+    if(hero&&hero.habilidad&&hero.habilidad.tipo==="activa")useHeroAbility("-1");
+  }
   if(B.eCool>0)return;
   const affordable=["melee","ranged","heavy"].filter(k=>P.gold>=unitStats(k,eF.era,eF.upArm).cost);
   if(!affordable.length)return;
@@ -212,6 +268,9 @@ function bloop(now){
     for(const sd of["1","-1"]){
       const P=B.S[sd];P.gold+=P.income*dt;
       for(const k in P.cool)P.cool[k]=Math.max(0,P.cool[k]-dt);
+      P.spdBuffT=Math.max(0,P.spdBuffT-dt);
+      P.defBuffT=Math.max(0,P.defBuffT-dt);
+      P.dmgBuffAllT=Math.max(0,P.dmgBuffAllT-dt);
     }
     if(!B.pvp)enemyAI(dt);
     // torreta de la base defendida (según nivel de base del territorio)
@@ -222,46 +281,69 @@ function bloop(now){
         const tgt=B.units.filter(u=>u.side===targetSide).sort((a,b)=>
           targetSide===1?b.x-a.x:a.x-b.x)[0];
         const tx=B.mode==="attack"?W-60:60;
-        if(tgt&&Math.abs(tgt.x-tx)<270){B.turretT=1.4;tgt.hp-=4+tb*4;tgt.flash=0.12;
+        if(tgt&&Math.abs(tgt.x-tx)<270){B.turretT=1.4;tgt.hp-=(4+tb*4)*dmgTakenMult(tgt);tgt.flash=0.12;
           B.projs.push({x:tx,y:GROUND-92,tx:tgt.x,ty:GROUND-16,t:0.22});}
       }
     }
     // unidades
     for(const u of B.units){
       u.t-=dt;u.bob+=dt*7;u.flash=Math.max(0,u.flash-dt);
+      u.stunT=Math.max(0,(u.stunT||0)-dt);
+      if(u.stunT>0)continue; // aturdido (onda de Amaru): no ataca ni avanza
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0);
       let tgt=null,dist=Infinity;
       for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
       const baseX=u.side===1?W-58:58;
       const baseD=(baseX-u.x)*u.side;
+      const dmgMultOut=(B.S[String(u.side)].dmgBuffAllT>0)?1.15:1; // Ollantay: al morir, +15% daño 8s
       if(tgt&&dist<=u.rng){
         if(u.t<=0){u.t=u.atk;
           const mult=counterMult(u,tgt);
-          const dm=u.dmg*mult;
+          const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
           tgt.hp-=dm;tgt.flash=0.15;SFX.hit();
           B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:Math.round(dm),t:0.6,
             c:mult>1?"#FFD866":(mult<1?"#9FB3BE":"#F4E9C8")});
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:tgt.x,ty:GROUND-16,t:0.2});
-          if(tgt.hp<=0){SFX.die();
-            B.corpses.push({x:tgt.x,side:tgt.side,size:tgt.size,t:0.9,
-              c:FACTIONS[tgt.side===1?B.pFacId:B.eFacId].color});
-            {const rew=Math.round(unitStats(tgt.kind,tgt.era,0,1).cost*0.7);
-              B.S[String(u.side)].gold+=rew;
-              if(u.side===1||B.pvp){B.dmgs.push({x:tgt.x,y:GROUND-70,txt:"+"+rew+"🪙",t:0.8,c:"#7ED66E"});SFX.coin();}}
-            for(let i=0;i<(SET.fx?7:2);i++)B.pufs.push({x:tgt.x,y:GROUND-16,
-              vx:(Math.random()-.5)*3,vy:-Math.random()*2.5,t:0.5,
-              c:FACTIONS[tgt.side===1?player:B.eFacId].color,s:3+Math.random()*4});}
+          if(u.heroId==="tomoegozen"){ // Danza de la Naginata: golpe en área pequeña
+            const nearby=B.units.filter(v=>v!==tgt&&v.side===tgt.side&&v.hp>0&&Math.abs(v.x-tgt.x)<28);
+            for(const v of nearby){
+              const spl=u.dmg*0.5*dmgTakenMult(v);v.hp-=spl;v.flash=0.15;
+              B.dmgs.push({x:v.x,y:GROUND-52*v.size,txt:Math.round(spl),t:0.6,c:"#F4E9C8"});
+            }
+          }
+          if(tgt.hp<=0){
+            if(tgt.kind==="ranged"&&u.heroId==="tomoegozen")heroProgressBump(B.S[String(u.side)].fac,"tomoegozen","rangedKills");
+            if(tgt.kind==="champ"&&tgt.heroId==="amaru"&&!B.S[String(tgt.side)].amaruRevived){
+              // Renacer de la Serpiente: 1 vez/batalla, revive con 50% PV y aturde alrededor
+              B.S[String(tgt.side)].amaruRevived=true;tgt.hp=tgt.max*0.5;tgt.flash=0.3;
+              for(const v of B.units)if(v.side!==tgt.side&&Math.abs(v.x-tgt.x)<160)v.stunT=1.5;
+              B.dmgs.push({x:tgt.x,y:GROUND-90,txt:"🐍 ¡Renace!",t:1.2,c:"#B15FE0"});
+              SFX.evolve();
+            }else{
+              SFX.die();
+              if(tgt.kind==="champ"&&tgt.heroId==="ollantay")B.S[String(tgt.side)].dmgBuffAllT=8;
+              B.corpses.push({x:tgt.x,side:tgt.side,size:tgt.size,t:0.9,
+                c:FACTIONS[tgt.side===1?B.pFacId:B.eFacId].color});
+              {const rew=Math.round(unitStats(tgt.kind,tgt.era,0,1).cost*0.7);
+                B.S[String(u.side)].gold+=rew;
+                if(u.side===1||B.pvp){B.dmgs.push({x:tgt.x,y:GROUND-70,txt:"+"+rew+"🪙",t:0.8,c:"#7ED66E"});SFX.coin();}}
+              for(let i=0;i<(SET.fx?7:2);i++)B.pufs.push({x:tgt.x,y:GROUND-16,
+                vx:(Math.random()-.5)*3,vy:-Math.random()*2.5,t:0.5,
+                c:FACTIONS[tgt.side===1?player:B.eFacId].color,s:3+Math.random()*4});
+            }
+          }
         }
       }else if(!tgt&&baseD<=u.rng+18){
         if(u.t<=0){u.t=u.atk;
-          if(u.side===1){B.eHP-=u.dmg;if(SET.fx)B.shake=Math.max(B.shake,3);}
-          else{B.pHP-=u.dmg;if(SET.fx)B.shake=Math.max(B.shake,3);}
+          if(u.side===1){B.eHP-=u.dmg*dmgMultOut;if(SET.fx)B.shake=Math.max(B.shake,3);}
+          else{B.pHP-=u.dmg*dmgMultOut;if(SET.fx)B.shake=Math.max(B.shake,3);}
           SFX.hit();
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2});}
       }else{
+        const spdMult=(B.S[String(u.side)].spdBuffT>0)?1.2:1; // Boudica: Carga Furiosa (6s)
         const ally=B.units.find(v=>v!==u&&v.side===u.side&&v.hp>0&&
           (v.x-u.x)*u.side>0&&(v.x-u.x)*u.side<20&&v.rng<=60);
-        if(!ally||u.rng>60&&(ally.x-u.x)*u.side>40)u.x+=u.spd*u.side*dt;
+        if(!ally||u.rng>60&&(ally.x-u.x)*u.side>40)u.x+=u.spd*spdMult*u.side*dt;
       }
     }
     B.units=B.units.filter(u=>{
@@ -287,6 +369,11 @@ function bloop(now){
       r.cd.style.height=(P.cool.spec/30*100)+"%";}
     else if(r.kind==="champ"){r.el.disabled=B.over||P.cool.champ>0||P.champAlive;
       r.cd.style.height=(P.cool.champ/60*100)+"%";}
+    else if(r.kind==="heroAbil"){
+      const hero=ALL_HEROES[f.heroes[0]],cd=hero&&hero.habilidad?hero.habilidad.cd:1;
+      r.el.disabled=B.over||!P.champAlive||P.cool.heroAbil>0;
+      r.cd.style.height=(P.cool.heroAbil/cd*100)+"%";
+    }
     else{const st=unitStats(r.kind,f.era,f.upArm);
       r.el.disabled=B.over||P.gold<st.cost||P.cool[r.kind]>0;
       r.cd.style.height=(P.cool[r.kind]/st.cd*100)+"%";}
@@ -433,6 +520,15 @@ function finishBattle(win,retreat=false){
   if(!B||B.over)return;
   B.over=true;B.result=win;
   const me=B.pFacId,foe=B.eFacId;
+  // progreso de armas alternativas (por partida): Aníbal cuenta victorias con él activo,
+  // Leónidas cuenta batallas completas sobreviviendo (gane o pierda el bando).
+  for(const side of["1","-1"]){
+    const S=B.S[side],fid=S.fac,heroId=F[fid].heroes[0];
+    if(!heroId)continue;
+    const wonThisSide=(side==="1")===win;
+    if(heroId==="anibal"&&wonThisSide)heroProgressBump(fid,"anibal","wins");
+    if(heroId==="leonidas"&&S.champAlive)heroProgressBump(fid,"leonidas","battlesSurvived");
+  }
   if(win){SFX.win();burstScreen([FACTIONS[me].color,"#D9A441","#E8DCC0"],110);}
   else{SFX.lose();if(B.pvp)burstScreen([FACTIONS[foe].color,"#E8DCC0"],90);}
   const{from,to,mode}=B;
