@@ -90,7 +90,7 @@ const HEROES = {
 // visible). Sus habilidades se implementan cuando llegue su fase de
 // desbloqueo (principalmente Campaña II). ----
 const HEROES_BLOQUEADOS = {
-  elcid: { id: "elcid", name: "El Cid", region: "España", rarity: "comun", locked: true, condDesc: "Gana 3 defensas" },
+  elcid: { id: "elcid", name: "El Cid", region: "España", rarity: "comun", locked: true, condDesc: "1 victoria en cualquier dificultad (o gana 3 defensas)" },
   yisunsin: { id: "yisunsin", name: "Yi Sun-sin", region: "Corea", rarity: "comun", locked: true, condDesc: "Usa ruta marítima para conquistar 5 veces" },
   tupacamaru2: { id: "tupacamaru2", name: "Túpac Amaru II", region: "Andes", rarity: "comun", locked: true, condDesc: "Gana una defensa estando bajo coalición" },
   zenobia: { id: "zenobia", name: "Zenobia", region: "Palmira", rarity: "comun", locked: true, condDesc: "Controla Medio Oriente" },
@@ -149,13 +149,21 @@ function heroProgressBump(fid, heroId, key, delta = 1) {
   f.heroProgress[heroId][key] = (f.heroProgress[heroId][key] || 0) + delta;
 }
 
-/* ==================== DESBLOQUEO DE AMARU (LEGACY) ====================
-   Se llama desde endGame(): Fe≥120 y ganar la partida. */
+/* ==================== DESBLOQUEOS DE LEGADO ====================
+   Se llama desde endGame() tras actualizar LEGACY.wins. El Cid: 1
+   victoria (LEGACY.wins≥1, cualquier dificultad) — así el legado de
+   quien ya ganaba partidas antes de 2A no se queda sin beneficio;
+   sigue pendiente su vía alternativa "gana 3 defensas" para cuando
+   se implemente esa mecánica. Amaru: Fe≥120 y ganar esa partida. */
 function checkHeroLegacyUnlocks(fid, won) {
+  if (!LEGACY.heroes) LEGACY.heroes = {};
+  if (LEGACY.wins >= 1 && !LEGACY.heroes.elcid) {
+    LEGACY.heroes.elcid = true;
+    log("⭐ Desbloqueaste a El Cid: 1 victoria en cualquier dificultad.", "win");
+  }
   if (!won) return;
   const f = F[fid];
   if (f && f.faith >= 120) {
-    if (!LEGACY.heroes) LEGACY.heroes = {};
     if (!LEGACY.heroes.amaru) {
       LEGACY.heroes.amaru = true;
       log("⭐ Desbloqueaste a Amaru: Fe ≥120 y victoria.", "win");

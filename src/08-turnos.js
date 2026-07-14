@@ -73,6 +73,12 @@ function aiTurns(fromTurnFlow){
       const avail=Object.keys(ALL_HEROES).filter(id=>ALL_HEROES[id].tipoAtaque&&isHeroUnlocked(id));
       if(avail.length)setHeroSlot(fid,0,avail[Math.floor(Math.random()*avail.length)]);
     }
+    for(const slot of[1,2]){ // consejo: misma regla que el activo (pilar 4: sin ayudas para la IA, tampoco desventajas)
+      if(!f.heroes[slot]&&Math.random()<0.25){
+        const avail=Object.keys(ALL_HEROES).filter(id=>isHeroUnlocked(id)&&!f.heroes.includes(id));
+        if(avail.length)setHeroSlot(fid,slot,avail[Math.floor(Math.random()*avail.length)]);
+      }
+    }
     if(f.gold>=45&&Math.random()<0.25){const t=T[mineAll[0]];
       if(t&&t.base<3){f.gold-=30+t.base*25;t.base++;}}
     // diplomacia proactiva hacia un humano

@@ -4,6 +4,7 @@
 const LEGACY={wins:0,scen:{},heroes:{}};
 function legacyDesc(){
   const b=[];
+  if(LEGACY.wins>=1)b.push("⭐ El Cid desbloqueado");
   if(LEGACY.wins>=2)b.push("🪙 +20 de oro inicial");
   if(LEGACY.wins>=3)b.push("⚔️ Héroe activo inicia con arma nv2");
   if(LEGACY.wins>=5)b.push("💰 Economía nv1 inicial");
