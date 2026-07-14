@@ -328,6 +328,58 @@ test("Amaru se desbloquea en el legado tras Fe≥120 y victoria", async () => {
   } finally { closeGame(g); }
 });
 
+/* 14 (Fase 2B). Duelo de Campeones: un solo duelo por batalla, <10s,
+   perdedor >=1 PV (nunca muere), recompensa aplicada. Math.random se
+   fija a 0.1 dentro de la página para que la resolución sea determinista:
+   con ambos héroes "comunes" y arma nv1, el término aleatorio es idéntico
+   para los dos bandos -> empate exacto -> gana el bando "1" (Leónidas). */
+test("Duelo de Campeones: máx. 1 por batalla, perdedor no muere, recompensa aplicada", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("EUN")'); // abre batalla vs CO
+    g.win.eval('setHeroSlot(player,0,"leonidas")');
+    g.win.eval('F[B.eFacId].heroes[0]="boudica"');
+    g.win.eval('B.S["-1"].cool.champ=0;'); // sin retraso de IA para esta prueba
+    g.win.eval('spawnChamp("1")');
+    g.win.eval('spawnChamp("-1")');
+    assert.strictEqual(g.win.eval('B.S["1"].champAlive'), true);
+    assert.strictEqual(g.win.eval('B.S["-1"].champAlive'), true);
+
+    g.win.eval(`(function(){
+      const h1=B.units.find(u=>u.kind==="champ"&&u.side===1);
+      const h2=B.units.find(u=>u.kind==="champ"&&u.side===-1);
+      h1.x=W/2-20; h2.x=W/2+20;
+      Math.random=()=>0.1;
+    })()`);
+    g.win.eval('bloop(performance.now())'); // un frame: la cercanía debe disparar el duelo
+    assert.strictEqual(g.win.eval('!!B.duel'), true);
+    assert.ok(g.win.eval('B.duel.duration') < 10, "el duelo debe durar menos de 10s");
+
+    const pHPBefore = g.win.eval('B.pHP'), eHPBefore = g.win.eval('B.eHP');
+    g.win.eval('B.duel.t = B.duel.duration + 1;'); // forzar que este frame ya lo resuelva
+    g.win.eval('bloop(performance.now())');
+
+    assert.strictEqual(g.win.eval('B.duelDone'), true);
+    assert.strictEqual(g.win.eval('B.duel'), null);
+    assert.strictEqual(g.win.eval('B.pHP'), pHPBefore, "el duelo no debe tocar las bases");
+    assert.strictEqual(g.win.eval('B.eHP'), eHPBefore, "el duelo no debe tocar las bases");
+
+    const h2Frac = g.win.eval(`(function(){
+      const h2=B.units.find(u=>u.kind==="champ"&&u.side===-1);
+      return h2.hp/h2.max;
+    })()`);
+    assert.ok(h2Frac > 0, "el perdedor no debe morir en el duelo");
+    assert.ok(Math.abs(h2Frac - 0.3) < 0.01, "el perdedor (Boudica) debe quedar al 30% de su PV");
+    assert.ok(g.win.eval('B.S["1"].dmgBuffAllT') > 0, "recompensa del ganador aplicada (+15% daño aliado)");
+
+    g.win.eval('bloop(performance.now())'); // aunque sigan cerca, no debe haber un 2º duelo
+    assert.strictEqual(g.win.eval('!!B.duel'), false);
+  } finally { closeGame(g); }
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

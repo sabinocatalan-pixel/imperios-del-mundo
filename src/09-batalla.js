@@ -190,7 +190,11 @@ function heroDuelPower(u,side){
 }
 function resolveDuel(){
   const d=B.duel,h1=d.h1,h2=d.h2;
-  d.resolved=true;B.duelDone=true;B.duel=null;
+  // Ojo: NO poner B.duel=null aquí. El bucle de unidades de este mismo
+  // frame todavía tiene que verlo como activo para seguir pausando a los
+  // duelistas — si no, pelearían normalmente justo después de resolverse,
+  // sumando daño de combate encima del resultado del duelo en el mismo tick.
+  d.resolved=true;B.duelDone=true;
   if(!B.units.includes(h1)||!B.units.includes(h2))return; // uno murió por causas ajenas al duelo
   const p1=heroDuelPower(h1,"1"),p2=heroDuelPower(h2,"-1");
   const side1Wins=p1>=p2;
@@ -344,7 +348,7 @@ function bloop(now){
       u.t-=dt;u.bob+=dt*7;u.flash=Math.max(0,u.flash-dt);
       u.stunT=Math.max(0,(u.stunT||0)-dt);
       if(u.stunT>0)continue; // aturdido (onda de Amaru): no ataca ni avanza
-      if(B.duel&&!B.duel.resolved&&(u===B.duel.h1||u===B.duel.h2||Math.abs(u.x-B.duel.mid)<140))continue; // duelo: pausa en 140px
+      if(B.duel&&(u===B.duel.h1||u===B.duel.h2||Math.abs(u.x-B.duel.mid)<140))continue; // duelo: pausa en 140px (también en el frame que se resuelve)
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0);
       let tgt=null,dist=Infinity;
       for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
@@ -401,6 +405,7 @@ function bloop(now){
         if(!ally||u.rng>60&&(ally.x-u.x)*u.side>40)u.x+=u.spd*spdMult*u.side*dt;
       }
     }
+    if(B.duel&&B.duel.resolved)B.duel=null; // recién ahora: el bucle de arriba ya respetó la pausa este frame
     B.units=B.units.filter(u=>{
       if(u.hp<=0&&u.kind==="champ")B.S[String(u.side)].champAlive=false;
       return u.hp>0;});
