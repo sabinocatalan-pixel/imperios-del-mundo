@@ -17,6 +17,7 @@
 <body>
 <header>
   <button class="icobtn" id="btnMissions" title="Misiones">🎯</button>
+  <button class="icobtn" id="btnPanteon" title="Panteón">⭐</button>
   <div class="htitle"><h1>Imperios del Mundo <span>IV</span></h1></div>
   <button class="icobtn" id="btnSettings" title="Ajustes">⚙️</button>
 </header>
@@ -116,6 +117,19 @@
     <h2>🎯 Misiones</h2>
     <div id="misList"></div>
     <div class="btns" style="justify-content:center"><button class="act" onclick="closeModals()">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Modal Panteón / Ficha / Códice -->
+<div class="modal" id="panteonModal">
+  <div class="card">
+    <h2>⭐ Panteón</h2>
+    <div class="btns" style="justify-content:center;margin-bottom:8px">
+      <button class="act" onclick="panteonSwitchTab('panteon')">🏛 Panteón</button>
+      <button class="act" onclick="panteonSwitchTab('codice')">📖 Códice</button>
+    </div>
+    <div id="panteonBody" data-tab="panteon"></div>
+    <div class="btns" style="justify-content:center;margin-top:8px"><button class="act" onclick="closeModals()">Cerrar</button></div>
   </div>
 </div>
 
