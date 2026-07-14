@@ -204,7 +204,7 @@ test("IA de batalla: usa especial y despliega campeón cuando corresponde", asyn
     g.win.eval('clickTerr("CAN")');
     g.win.eval('clickTerr("EUN")'); // ataca a CO -> B.eFacId === "CO"
     assert.strictEqual(g.win.eval("inBattle"), true);
-    g.win.eval('F[B.eFacId].champ="Aníbal"');
+    g.win.eval('F[B.eFacId].heroes[0]="anibal"');
     g.win.eval('B.time=13; B.S["-1"].cool.spec=0; B.S["-1"].cool.champ=0;');
     g.win.eval('for(let i=0;i<3;i++)B.units.push(mkUnit(1,"melee",0,0,1));');
     g.win.eval('enemyAI(0.1)');
@@ -262,6 +262,69 @@ test("PWA: autoguardado del legado al terminar la partida", async () => {
     const saved = g.win.eval("localStorage.getItem('imperiosLegado')");
     assert.ok(saved);
     assert.strictEqual(saved, g.win.eval("legacyCode()"));
+  } finally { closeGame(g); }
+});
+
+/* 11 (Fase 2A). Panteón: límites de equipamiento — máx. 1 mítico, máx. 3 equipados. */
+test("Panteón: límites de equipamiento (máx. 1 mítico, máx. 3 equipados)", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('LEGACY.heroes.amaru=true; LEGACY.heroes.inkarri=true;'); // desbloqueo de prueba
+
+    assert.strictEqual(g.win.eval('setHeroSlot(player,0,"amaru")'), true);
+    // Un segundo mítico (Inkarri) en otro slot debe rechazarse: máx. 1 mítico equipado.
+    assert.strictEqual(g.win.eval('setHeroSlot(player,1,"inkarri")'), false);
+    assert.strictEqual(g.win.eval('F[player].heroes[1]'), null);
+
+    // Llenar los 3 slots con héroes no míticos.
+    assert.strictEqual(g.win.eval('setHeroSlot(player,0,"leonidas")'), true);
+    assert.strictEqual(g.win.eval('setHeroSlot(player,1,"suntzu")'), true);
+    assert.strictEqual(g.win.eval('setHeroSlot(player,2,"boudica")'), true);
+    assert.strictEqual(g.win.eval('heroEquippedIds(F[player]).length'), 3);
+
+    // Solo existen 3 casillas: no hay forma de equipar una 4ta.
+    assert.strictEqual(g.win.eval('setHeroSlot(player,3,"ollantay")'), false);
+    assert.strictEqual(g.win.eval('heroEquippedIds(F[player]).length'), 3);
+  } finally { closeGame(g); }
+});
+
+/* 12 (Fase 2A). Sun Tzu: -10% costo de unidades solo mientras está vivo en campo. */
+test("Sun Tzu: la reducción de costo solo aplica con él vivo en campo", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("EUN")'); // abre batalla, B.S["1"] = AG
+    g.win.eval('setHeroSlot(player,0,"suntzu")');
+
+    const costBefore = g.win.eval('unitStats("melee",F[player].era,F[player].upArm).cost');
+    const gold1 = g.win.eval('B.S["1"].gold');
+    g.win.eval('spawnUnit("1","melee")'); // Sun Tzu aún no está desplegado: sin descuento
+    assert.strictEqual(gold1 - g.win.eval('B.S["1"].gold'), costBefore);
+
+    g.win.eval('spawnChamp("1")');
+    assert.strictEqual(g.win.eval('B.S["1"].champAlive'), true);
+    g.win.eval('B.S["1"].cool.melee=0;');
+    const gold2 = g.win.eval('B.S["1"].gold');
+    g.win.eval('spawnUnit("1","melee")'); // ahora sí, con Sun Tzu vivo en campo
+    assert.strictEqual(gold2 - g.win.eval('B.S["1"].gold'), Math.round(costBefore * 0.9));
+  } finally { closeGame(g); }
+});
+
+/* 13 (Fase 2A). Amaru se desbloquea en el legado tras Fe≥120 y victoria. */
+test("Amaru se desbloquea en el legado tras Fe≥120 y victoria", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    assert.ok(!g.win.eval('LEGACY.heroes.amaru'));
+    g.win.eval('F[player].faith=125;');
+    g.win.eval('endGame("¡Victoria!","fin de prueba",true,player)');
+    assert.strictEqual(g.win.eval('LEGACY.heroes.amaru'), true);
+    assert.strictEqual(g.win.eval('isHeroUnlocked("amaru")'), true);
   } finally { closeGame(g); }
 });
 
