@@ -54,6 +54,20 @@ function closeGame(game) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Espera activa por condición en vez de sleeps fijos: el motor de batalla y
+// aiTurns() avanzan con setTimeout internos cuyo margen real depende de la
+// velocidad del runner (un CI puede ser bastante más lento que una laptop),
+// así que sondear hasta que se cumpla la condición (con un timeout generoso
+// como red de seguridad) es más robusto que adivinar cuántos ms alcanzan.
+async function waitUntil(win, predicateExpr, { timeout = 8000, interval = 50 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (win.eval(predicateExpr)) return true;
+    await sleep(interval);
+  }
+  return false;
+}
+
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
@@ -86,8 +100,8 @@ test("Ataque: abre batalla, counterMult correcto, conquista al ganar", async () 
     assert.ok(Math.abs(cm2 - 0.66) < 1e-9);
 
     g.win.eval('finishBattle(true)');
-    await sleep(1700);
-    assert.strictEqual(g.win.eval('T.EUN.owner'), "AG");
+    const conquered = await waitUntil(g.win, 'T.EUN.owner==="AG"');
+    assert.ok(conquered, "finishBattle(true) debe transferir el territorio (timeout esperando)");
     assert.strictEqual(g.win.eval("missions.find(m=>m.id==='conq1').done"), true);
   } finally { closeGame(g); }
 });
@@ -106,9 +120,9 @@ test("Anti-crash: facción eliminada durante aiTurns no rompe la ronda", async (
     g.win.eval('endHumanTurn()');
     g.win.eval('ownedBy("SB").forEach(id=>{T[id].owner="SO";})');
     assert.strictEqual(g.win.eval('ownedBy("SB").length'), 0);
-    await sleep(4500);
+    const advanced = await waitUntil(g.win, `round > ${roundBefore}`, { timeout: 12000 });
     assert.strictEqual(g.errors.length, 0, "no debe haber excepciones: " + JSON.stringify(g.errors));
-    assert.ok(g.win.eval("round") > roundBefore, "la ronda debe avanzar");
+    assert.ok(advanced, "la ronda debe avanzar (timeout esperando)");
   } finally { closeGame(g); }
 });
 
