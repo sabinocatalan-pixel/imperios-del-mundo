@@ -15,6 +15,9 @@ function incomePhase(){
     const mult=(fid===player?1:diffMult);
     f.gold+=Math.floor(g*(1+f.upEco*0.2)*mult);
     f.food+=fo;f.science+=sc;f.faith+=fa;f.culture+=cu;
+    if(f.heroes[1]==="pachacutec"||f.heroes[2]==="pachacutec"){ // consejo: +1🪙/ronda por territorio sudamericano
+      f.gold+=ownedBy(fid).filter(id=>CONTINENTS["Sudamérica"].ids.includes(id)).length;
+    }
   }
   for(const id in T){
     const t=T[id],f=F[t.owner];
@@ -79,6 +82,7 @@ function checkEnd(){
 function endGame(title,text,won=true,winner=null){
   phase="over";
   if(won&&!scenario&&humans.length===1)LEGACY.wins++;
+  if(won&&player)checkHeroLegacyUnlocks(player,won);
   autoSaveLegacy();
   $("ovTitle").textContent=title;$("ovText").textContent=text;
   $("ovLeg").value=legacyCode();

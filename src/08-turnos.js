@@ -69,8 +69,10 @@ function aiTurns(fromTurnFlow){
       log(`${P.name} avanzó a la ${ERAS[f.era]}.`);}
     if(f.gold>=60&&f.upArm<3&&Math.random()<0.3){f.gold-=40;f.upArm++;}
     if(P.eco>0.6&&f.gold>=60&&f.upEco<3&&Math.random()<0.4){f.gold-=35;f.upEco++;}
-    if(!f.champ&&f.gold>=60&&Math.random()<0.25){f.gold-=60;
-      f.champ=CHAMPS[Math.floor(Math.random()*CHAMPS.length)];}
+    if(!f.heroes[0]&&Math.random()<0.25){
+      const avail=Object.keys(ALL_HEROES).filter(id=>ALL_HEROES[id].tipoAtaque&&isHeroUnlocked(id));
+      if(avail.length)setHeroSlot(fid,0,avail[Math.floor(Math.random()*avail.length)]);
+    }
     if(f.gold>=45&&Math.random()<0.25){const t=T[mineAll[0]];
       if(t&&t.base<3){f.gold-=30+t.base*25;t.base++;}}
     // diplomacia proactiva hacia un humano
