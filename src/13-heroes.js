@@ -15,6 +15,7 @@ const HEROES = {
     id: "leonidas", name: "Leónidas", region: "Grecia", rarity: "comun",
     tipoAtaque: "melee", locked: false,
     habilidad: { tipo: "pasiva", nombre: "Muro de Escudos", desc: "Melee aliados +10% def mientras vive" },
+    frase: "¡Ven a tomarlas!",
     leyenda: "Rey de Esparta, símbolo de resistencia frente a un imperio muchas veces mayor.",
     notaCultural: "Inspirado en la historia de Grecia; representación lúdica y educativa, no documental.",
     armaAlt: {
@@ -27,6 +28,7 @@ const HEROES = {
     id: "suntzu", name: "Sun Tzu", region: "China", rarity: "comun",
     tipoAtaque: "ranged", locked: false,
     habilidad: { tipo: "pasiva", nombre: "El Arte de la Guerra", desc: "Unidades cuestan −10% mientras está en campo" },
+    frase: "Conoce a tu enemigo y conócete a ti mismo.",
     leyenda: "Estratega y autor de El arte de la guerra; su presencia abarata la maquinaria militar.",
     notaCultural: "Inspirado en la historia de China; representación lúdica y educativa, no documental."
   },
@@ -34,6 +36,7 @@ const HEROES = {
     id: "boudica", name: "Boudica", region: "Britania", rarity: "comun",
     tipoAtaque: "melee", locked: false,
     habilidad: { tipo: "activa", nombre: "Carga Furiosa", desc: "Aliados +20% velocidad 6s", cd: 25 },
+    frase: "¡Cada aldea quemada será vengada!",
     leyenda: "Reina guerrera de los icenos; lideró la revuelta contra la ocupación romana en Britania.",
     notaCultural: "Inspirada en la historia de Britania; representación lúdica y educativa, no documental."
   },
@@ -41,6 +44,7 @@ const HEROES = {
     id: "ollantay", name: "Ollantay", region: "Andes", rarity: "comun",
     tipoAtaque: "melee", locked: false,
     habilidad: { tipo: "pasiva", nombre: "Corazón Rebelde", desc: "Al morir, tropas +15% daño 8s" },
+    frase: "Mi corazón no se rinde ante ningún imperio.",
     leyenda: "Guerrero legendario de los Andes cuya rebeldía frente al Inca inspiró a generaciones.",
     notaCultural: "Inspirado en la tradición andina; representación lúdica y educativa, no documental."
   },
@@ -48,6 +52,7 @@ const HEROES = {
     id: "anibal", name: "Aníbal", region: "Cartago", rarity: "raro",
     tipoAtaque: "melee", locked: false,
     habilidad: { tipo: "activa", nombre: "Flanqueo", desc: "Invoca 2 melee adelantados", cd: 35 },
+    frase: "Encontraremos un camino, o lo abriremos.",
     leyenda: "General cartaginés que cruzó los Alpes para desafiar a Roma en su propio territorio.",
     notaCultural: "Inspirado en la historia de Cartago; representación lúdica y educativa, no documental.",
     armaAlt: {
@@ -60,6 +65,7 @@ const HEROES = {
     id: "tomoegozen", name: "Tomoe Gozen", region: "Japón", rarity: "raro",
     tipoAtaque: "melee", locked: false,
     habilidad: { tipo: "pasiva", nombre: "Danza de la Naginata", desc: "Golpes con área pequeña" },
+    frase: "Mi naginata no conoce el miedo.",
     leyenda: "Guerrera samurái célebre por su destreza con la naginata durante el periodo Heian.",
     notaCultural: "Inspirada en la historia de Japón; representación lúdica y educativa, no documental.",
     armaAlt: {
@@ -73,6 +79,7 @@ const HEROES = {
     tipoAtaque: "melee", locked: false,
     habilidad: { tipo: "activa", nombre: "Reorganización Imperial", desc: "Cura 25% PV aliados + 10% def 10s", cd: 40 },
     consejo: { desc: "+1🪙/ronda por territorio sudamericano" },
+    frase: "El imperio se construye con orden, no solo con la espada.",
     leyenda: "Noveno Sapa Inca; expandió y reorganizó el Tahuantinsuyo con una administración ejemplar.",
     notaCultural: "Inspirado en la historia del Tahuantinsuyo; representación lúdica y educativa, no documental."
   },
@@ -80,6 +87,7 @@ const HEROES = {
     id: "amaru", name: "Amaru", region: "Andes (mito)", rarity: "mitico",
     tipoAtaque: "ranged", locked: true,
     habilidad: { tipo: "activa", nombre: "Renacer de la Serpiente", desc: "1 vez/batalla: al morir renace con 50% PV + onda que aturde 1.5s" },
+    frase: "La serpiente que muere, siempre renace.",
     leyenda: "???",
     notaCultural: "Inspirado en la mitología andina; representación lúdica y educativa, no documental.",
     condDesc: "Fe ≥120 y ganar esa partida"

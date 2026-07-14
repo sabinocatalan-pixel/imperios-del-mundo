@@ -88,6 +88,7 @@ function openBattle(from,to,mode){
     pFacId,eFacId,
     pHP:0,pMax:0,eHP:0,eMax:0,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],
+    duel:null,duelDone:false,
     stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
     last:performance.now(),
     S:{
@@ -164,6 +165,49 @@ function useHeroAbility(side){
     P.defBuffT=10;
     B.dmgs.push({x:W/2,y:GROUND-140,txt:"✨ ¡Reorganización Imperial!",t:1.2,c:"#7ED66E"});
   }
+}
+
+/* ==================== DUELO DE CAMPEONES (Fase 2B) ====================
+   Máx. 1 por batalla: se dispara cuando los dos héroes activos están a
+   ≤60px. Pausa las unidades en 140px de radio (incluidos los propios
+   duelistas) mientras se resuelve; el perdedor NUNCA muere (queda al
+   30% de su PV) y el duelo no puede tocar bases ni decidir la batalla
+   por sí mismo — solo entrega una recompensa moderada temporal. */
+const RAREZA_PTS_DUELO={comun:1,raro:2,legendario:3,mitico:4};
+function startDuel(h1,h2){
+  if(B.over||B.duelDone||B.duel)return;
+  B.duel={h1,h2,t:0,duration:6+Math.random()*4,mid:(h1.x+h2.x)/2,resolved:false};
+  const n1=ALL_HEROES[h1.heroId].name,n2=ALL_HEROES[h2.heroId].name;
+  const f1=ALL_HEROES[h1.heroId].frase||"",f2=ALL_HEROES[h2.heroId].frase||"";
+  B.dmgs.push({x:B.duel.mid,y:GROUND-170,txt:`${n1}: "${f1}"`,t:2.2,c:"#F4E9C8"});
+  B.dmgs.push({x:B.duel.mid,y:GROUND-185,txt:`${n2}: "${f2}"`,t:2.2,c:"#F4E9C8"});
+  SFX.evolve();
+}
+function heroDuelPower(u,side){
+  const f=F[B.S[side].fac],hero=ALL_HEROES[u.heroId];
+  const pvFrac=Math.max(0,u.hp)/u.max;
+  return f.heroWeaponLv*2+RAREZA_PTS_DUELO[hero.rarity]+pvFrac*3+(hero.duelBonus||0)+(Math.random()*4-2);
+}
+function resolveDuel(){
+  const d=B.duel,h1=d.h1,h2=d.h2;
+  d.resolved=true;B.duelDone=true;B.duel=null;
+  if(!B.units.includes(h1)||!B.units.includes(h2))return; // uno murió por causas ajenas al duelo
+  const p1=heroDuelPower(h1,"1"),p2=heroDuelPower(h2,"-1");
+  const side1Wins=p1>=p2;
+  const winner=side1Wins?h1:h2,loser=side1Wins?h2:h1;
+  const winSide=side1Wins?"1":"-1",loseSide=side1Wins?"-1":"1";
+  loser.hp=loser.max*0.3;loser.flash=0.3; // no muere, queda al 30% de su PV
+  const opciones=["dmg","heal","cd","stun"];
+  const reward=opciones[Math.floor(Math.random()*opciones.length)];
+  let rewardTxt="";
+  if(reward==="dmg"){B.S[winSide].dmgBuffAllT=12;rewardTxt="+15% daño aliado 12s";}
+  else if(reward==="heal"){winner.hp=Math.min(winner.max,winner.hp+winner.max*0.2);rewardTxt="+20% PV propio";}
+  else if(reward==="cd"){B.S[winSide].cool.spec=Math.max(0,B.S[winSide].cool.spec-8);rewardTxt="-8s cooldown del especial";}
+  else{for(const v of B.units)if(v.side===(+loseSide)&&Math.abs(v.x-d.mid)<140)v.stunT=2;rewardTxt="aturde cercanos 2s";}
+  const nameW=ALL_HEROES[winner.heroId].name,nameL=ALL_HEROES[loser.heroId].name;
+  log(`⚔ ${nameW} venció a ${nameL} en duelo: ${rewardTxt} (energía de ${nameL} baja).`,"win");
+  B.dmgs.push({x:d.mid,y:GROUND-165,txt:`⚔ ¡${nameW} gana el duelo!`,t:1.5,c:"#FFD866"});
+  SFX.win();
 }
 function useSpecial(side){
   const P=B.S[side],f=F[P.fac];
@@ -285,11 +329,22 @@ function bloop(now){
           B.projs.push({x:tx,y:GROUND-92,tx:tgt.x,ty:GROUND-16,t:0.22});}
       }
     }
+    // duelo de campeones: disparo (≤60px, máx. 1/batalla) y resolución
+    if(!B.duelDone&&!B.duel){
+      const h1=B.units.find(u=>u.side===1&&u.kind==="champ"&&u.hp>0);
+      const h2=B.units.find(u=>u.side===-1&&u.kind==="champ"&&u.hp>0);
+      if(h1&&h2&&Math.abs(h1.x-h2.x)<=60)startDuel(h1,h2);
+    }
+    if(B.duel&&!B.duel.resolved){
+      B.duel.t+=dt;
+      if(B.duel.t>=B.duel.duration)resolveDuel();
+    }
     // unidades
     for(const u of B.units){
       u.t-=dt;u.bob+=dt*7;u.flash=Math.max(0,u.flash-dt);
       u.stunT=Math.max(0,(u.stunT||0)-dt);
       if(u.stunT>0)continue; // aturdido (onda de Amaru): no ataca ni avanza
+      if(B.duel&&!B.duel.resolved&&(u===B.duel.h1||u===B.duel.h2||Math.abs(u.x-B.duel.mid)<140))continue; // duelo: pausa en 140px
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0);
       let tgt=null,dist=Infinity;
       for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
@@ -504,6 +559,14 @@ function drawBattle(){
   bx.textAlign="center";bx.font="700 13px Segoe UI";
   for(const d of B.dmgs){bx.globalAlpha=Math.min(1,d.t*2);bx.fillStyle=d.c;
     bx.fillText(d.txt,d.x,d.y);bx.globalAlpha=1;}
+  if(B.duel&&!B.duel.resolved){
+    const n1=ALL_HEROES[B.duel.h1.heroId].name,n2=ALL_HEROES[B.duel.h2.heroId].name;
+    bx.fillStyle="rgba(8,16,22,.6)";bx.fillRect(0,LH*0.05,W,50);
+    bx.fillStyle="#FFD866";bx.font="700 19px Impact, Arial";
+    bx.fillText("⚔ DUELO DE CAMPEONES",W/2,LH*0.05+23);
+    bx.fillStyle="#F4E9C8";bx.font="12px Segoe UI";
+    bx.fillText(`${n1}  vs  ${n2}`,W/2,LH*0.05+42);
+  }
   if(B.over&&B.result!==null){
     bx.fillStyle="rgba(8,16,22,.72)";bx.fillRect(0,0,W,LH);
     bx.fillStyle=B.result?"#D9A441":"#C63D2F";
