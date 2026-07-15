@@ -564,6 +564,7 @@ test("Anti-atoro universal: ranged y melee amontonados se reposicionan", async (
 test("Resumen del turno: se genera con máx. 6 líneas causales", async () => {
   const g = makeGame();
   try {
+    g.win.eval('Math.random=()=>0.99;'); // evita que una plaga al azar en incomePhase() contamine el conteo
     g.win.eval('startGame(1.0)');
     g.win.eval('clickTerr("CAN")'); // player = AG
 
@@ -585,6 +586,47 @@ test("Resumen del turno: se genera con máx. 6 líneas causales", async () => {
     g.win.eval('Math.random=()=>0.99;'); // evita que una plaga al azar contamine el conteo
     g.win.eval('turnSummaryLines=["algo"]; startRound();');
     assert.strictEqual(g.win.eval('turnSummaryLines.length'), 0);
+  } finally { closeGame(g); }
+});
+
+/* 20 (Fase 2D). Veteranía por regimiento: la XP sube tras la batalla,
+   Nv2 aplica +8% de daño, y una derrota con muchas bajas de ese tipo
+   descuenta 20% de la barra acumulada. */
+test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuenta 20%", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("EUN")'); // abre batalla vs CO (CAN ataca)
+    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 0);
+
+    g.win.eval('spawnUnit("1","melee")'); // 1 melee desplegado en esta batalla
+    g.win.eval('finishBattle(true)'); // side "1" (AG) gana
+    await sleep(1700); // finishBattle resuelve tras 1500ms
+    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 6,
+      "1 unidad desplegada (+2) + victoria (+4) = 6 XP");
+
+    // Nv2 (30 XP): +8% de daño sobre una unidad recién creada.
+    g.win.eval('F.AG.veterancy.melee.xp=30;');
+    const dmgBase=g.win.eval('unitStats("melee",F.AG.era,F.AG.upArm).dmg');
+    g.win.eval('T.CAN.troops=8;'); // el ataque anterior dejó pocas tropas para atacar de nuevo
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("RUS")'); // otro vecino de CAN (DR), EUN ya es de AG tras la conquista
+    g.win.eval('spawnUnit("1","melee")');
+    const dmgNv2=g.win.eval('B.units.find(u=>u.kind==="melee"&&u.side===1).dmg');
+    assert.ok(Math.abs(dmgNv2-dmgBase*1.08)<0.01, "Nv2 debe multiplicar el daño base por 1.08");
+
+    // Derrota con más de la mitad de bajas de ese tipo: -20% de la barra.
+    g.win.eval('F.AG.veterancy.melee.xp=50;');
+    g.win.eval('B.units.find(u=>u.kind==="melee"&&u.side===1).hp=0;'); // simula la baja
+    g.win.eval('finishBattle(false)'); // side "1" (AG) pierde
+    await sleep(1700);
+    // La ganancia por participar (+2, sin victoria ni bajas enemigas) se
+    // suma primero (50->52) y luego la derrota con >50% de bajas de ese
+    // tipo descuenta 20% de esa barra (52-10=42).
+    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 42,
+      "derrota con >50% de bajas de ese tipo debe descontar 20% tras sumar la participación");
   } finally { closeGame(g); }
 });
 
