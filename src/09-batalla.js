@@ -83,6 +83,30 @@ function dmgTakenMult(tgt){
   return mult;
 }
 
+/* ==================== BANNERS NARRATIVOS ====================
+   Ajuste de legibilidad (pilar 6): los anuncios importantes de batalla
+   (desgaste, habilidades de héroe, duelo) usan esta cola en vez del
+   sistema de números de daño flotantes (B.dmgs), que es demasiado
+   rápido para leer. Un solo banner visible a la vez, mínimo 3.5s con
+   fade-in/fade-out (o sin fade si prefers-reduced-motion — SET.fx ya
+   queda en false en ese caso, ver 01-config-audio.js); si llega uno
+   nuevo mientras otro está activo, se encola y espera su turno. */
+function pushBanner(txt,color="#FFD866",duration=3.5,subtxt=null){
+  const item={txt,subtxt,color,duration};
+  if(!B.banner)B.banner={...item,elapsed:0};
+  else B.bannerQueue.push(item);
+}
+function advanceBanner(dt){
+  if(B.banner){
+    B.banner.elapsed+=dt;
+    if(B.banner.elapsed>=B.banner.duration){
+      B.banner=B.bannerQueue.length?{...B.bannerQueue.shift(),elapsed:0}:null;
+    }
+  }else if(B.bannerQueue.length){
+    B.banner={...B.bannerQueue.shift(),elapsed:0};
+  }
+}
+
 function openBattle(from,to,mode){
   inBattle=true;selected=null;
   const defT=T[to],atkT=T[from];
@@ -96,6 +120,7 @@ function openBattle(from,to,mode){
     pHP:0,pMax:0,eHP:0,eMax:0,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],
     duel:null,duelDone:false,
+    banner:null,bannerQueue:[],
     pacing:{tension:false,muerteSubita:false,desgaste:false,resuelto:false},
     stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
     last:performance.now(),
@@ -166,7 +191,7 @@ function useHeroAbility(side){
   const allies=B.units.filter(u=>u.side===(+side));
   if(heroId==="boudica"){
     P.spdBuffT=6;
-    B.dmgs.push({x:W/2,y:GROUND-140,txt:"⚡ ¡Carga Furiosa!",t:1.2,c:"#FFD866"});
+    pushBanner("⚡ ¡Carga Furiosa!");
   }else if(heroId==="anibal"){
     const fx=(+side)===1?W*0.35:W*0.65;
     for(let i=0;i<2;i++){
@@ -174,11 +199,11 @@ function useHeroAbility(side){
       u.x=fx+(i-0.5)*24;
       B.units.push(u);
     }
-    B.dmgs.push({x:W/2,y:GROUND-140,txt:"🛡 ¡Flanqueo!",t:1.2,c:"#FFD866"});
+    pushBanner("🛡 ¡Flanqueo!");
   }else if(heroId==="pachacutec"){
     for(const u of allies)u.hp=Math.min(u.max,u.hp+u.max*0.25);
     P.defBuffT=10;
-    B.dmgs.push({x:W/2,y:GROUND-140,txt:"✨ ¡Reorganización Imperial!",t:1.2,c:"#7ED66E"});
+    pushBanner("✨ ¡Reorganización Imperial!","#7ED66E");
   }
 }
 
@@ -194,8 +219,7 @@ function startDuel(h1,h2){
   B.duel={h1,h2,t:0,duration:6+Math.random()*4,mid:(h1.x+h2.x)/2,resolved:false};
   const n1=ALL_HEROES[h1.heroId].name,n2=ALL_HEROES[h2.heroId].name;
   const f1=ALL_HEROES[h1.heroId].frase||"",f2=ALL_HEROES[h2.heroId].frase||"";
-  B.dmgs.push({x:B.duel.mid,y:GROUND-170,txt:`${n1}: "${f1}"`,t:2.2,c:"#F4E9C8"});
-  B.dmgs.push({x:B.duel.mid,y:GROUND-185,txt:`${n2}: "${f2}"`,t:2.2,c:"#F4E9C8"});
+  pushBanner(`${n1}: "${f1}"`,"#F4E9C8",3.5,`${n2}: "${f2}"`);
   SFX.evolve();
 }
 function heroDuelPower(u,side){
@@ -225,7 +249,7 @@ function resolveDuel(){
   else{for(const v of B.units)if(v.side===(+loseSide)&&Math.abs(v.x-d.mid)<140)v.stunT=2;rewardTxt="aturde cercanos 2s";}
   const nameW=ALL_HEROES[winner.heroId].name,nameL=ALL_HEROES[loser.heroId].name;
   log(`⚔ ${nameW} venció a ${nameL} en duelo: ${rewardTxt} (energía de ${nameL} baja).`,"win");
-  B.dmgs.push({x:d.mid,y:GROUND-165,txt:`⚔ ¡${nameW} gana el duelo!`,t:1.5,c:"#FFD866"});
+  pushBanner(`⚔ ¡${nameW} gana el duelo!`,"#FFD866",3.5,rewardTxt);
   SFX.win();
 }
 function useSpecial(side){
@@ -238,7 +262,7 @@ function useSpecial(side){
     const dm=dmg*dmgTakenMult(u);u.hp-=dm;u.flash=0.2;P.dmgDealt+=dm;
     B.dmgs.push({x:u.x,y:GROUND-50,txt:Math.round(dm),t:0.7,c:"#FFD866"});}
   B.shake=SET.fx?14:0;B.freeze=0.08;SFX.boom();
-  if(side==="-1")B.dmgs.push({x:W/2,y:GROUND-140,txt:"⚠️ ¡"+SPECIALS[f.era]+" enemigo!",t:1.4,c:"#FF7A66"});
+  if(side==="-1")pushBanner("⚠️ ¡"+SPECIALS[f.era]+" enemigo!","#FF7A66");
   for(let i=0;i<(SET.fx?26:8);i++)B.pufs.push({x:200+Math.random()*560,y:GROUND-Math.random()*120,
     vx:(Math.random()-.5)*3,vy:-Math.random()*2,t:0.6,c:"#FFB05A",s:4+Math.random()*5});
 }
@@ -344,19 +368,20 @@ function bloop(now){
     // narrativo y línea causal en el log.
     if(!B.pacing.tension&&B.time>=120){
       B.pacing.tension=true;B.S["1"].income*=1.1;B.S["-1"].income*=1.1;
-      B.dmgs.push({x:W/2,y:GROUND-150,txt:"⚠️ Tensión de guerra: +10% ingreso",t:3,c:"#FFD866"});
+      pushBanner("⚠️ Tensión de guerra: +10% ingreso");
       log("⚠️ Tensión de guerra en la batalla: el ingreso de ambos bandos sube 10%.");
     }
     if(!B.pacing.muerteSubita&&B.time>=150){
       B.pacing.muerteSubita=true;
-      B.dmgs.push({x:W/2,y:GROUND-150,txt:"💀 Muerte súbita: bases +20% daño recibido",t:3,c:"#C63D2F"});
+      pushBanner("💀 Muerte súbita: bases +20% daño recibido","#C63D2F");
       log("💀 Muerte súbita: las bases reciben 20% más de daño desde ahora.","loss");
     }
     if(!B.pacing.desgaste&&B.time>=180){
       B.pacing.desgaste=true;
-      B.dmgs.push({x:W/2,y:GROUND-150,txt:"📉 Desgaste: refuerzos con -10% PV",t:3,c:"#9FB3BE"});
+      pushBanner("📉 Desgaste: refuerzos con -10% PV","#9FB3BE");
       log("📉 Las líneas de suministro se agotan: los refuerzos llegan con -10% PV máximo.");
     }
+    advanceBanner(dt);
     for(const sd of["1","-1"]){
       const P=B.S[sd];P.gold+=P.income*dt;
       for(const k in P.cool)P.cool[k]=Math.max(0,P.cool[k]-dt);
@@ -675,6 +700,24 @@ function drawBattle(){
     bx.fillText("⚔ DUELO DE CAMPEONES",W/2,LH*0.05+23);
     bx.fillStyle="#F4E9C8";bx.font="12px Segoe UI";
     bx.fillText(`${n1}  vs  ${n2}`,W/2,LH*0.05+42);
+  }
+  if(B.banner){
+    // Se dibuja más abajo que el título del duelo para que nunca se
+    // superpongan si coinciden; la cola (bannerQueue) ya evita que dos
+    // anuncios de esta franja se muestren a la vez.
+    const FADE=0.4;
+    let alpha=1;
+    if(SET.fx){
+      if(B.banner.elapsed<FADE)alpha=B.banner.elapsed/FADE;
+      else if(B.banner.elapsed>B.banner.duration-FADE)alpha=Math.max(0,(B.banner.duration-B.banner.elapsed)/FADE);
+    }
+    const by=LH*0.17,bh=B.banner.subtxt?46:32;
+    bx.globalAlpha=alpha;
+    bx.fillStyle="rgba(8,16,22,.62)";bx.fillRect(0,by,W,bh);
+    bx.fillStyle=B.banner.color;bx.font="700 16px Impact, Arial";
+    bx.fillText(B.banner.txt,W/2,by+20);
+    if(B.banner.subtxt){bx.fillStyle="#F4E9C8";bx.font="12px Segoe UI";bx.fillText(B.banner.subtxt,W/2,by+38);}
+    bx.globalAlpha=1;
   }
   if(B.over&&B.result!==null){
     bx.fillStyle="rgba(8,16,22,.72)";bx.fillRect(0,0,W,LH);
