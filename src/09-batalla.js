@@ -56,6 +56,8 @@ function unitStats(kind,era,arm,wl){
   if(kind==="ranged")return{hp:45*m, dmg:8*m, spd:34,rng:185+era*20,atk:1.1,cost:55, cd:3, size:1.25};
   if(kind==="heavy") return{hp:200*m,dmg:16*m,spd:22,rng:era>=3?66:34,atk:1.05,cost:110,cd:8, size:1.7};
   if(kind==="air")   return{hp:55*m, dmg:12*m,spd:52,rng:90, atk:1,   cost:95, cd:10,size:1.35};
+  if(kind==="healer")return{hp:40*m, dmg:0,   spd:32,rng:70, atk:0.5, cost:65, cd:7, size:1.15,healRate:0.04};
+  if(kind==="siege") return{hp:55*m, dmg:20*m, spd:18,rng:280+era*15,atk:2.4,cost:125,cd:10,size:1.6,minRng:80};
   if(kind==="champ")return{hp:340*(1+.45*wl)*Math.pow(1.3,era),dmg:28*(1+.4*wl)*Math.pow(1.3,era),
     spd:36,rng:140,atk:0.65,cost:0,cd:60,size:1.9};
 }
@@ -66,9 +68,11 @@ function mkUnit(side,kind,era,arm,wl){
   // puramente visual (drawStick) — el combate sigue siendo 1D sobre x.
   const laneY=[-12,0,12][Math.floor(Math.random()*3)]+(Math.random()*8-4);
   return{side,kind,era,x:side===1?70:W-70,hp:s.hp,max:s.hp,dmg:s.dmg,spd:s.spd,
-    rng:s.rng,atk:s.atk,t:0,size:s.size,bob:Math.random()*6.28,flash:0,laneY};
+    rng:s.rng,atk:s.atk,t:0,size:s.size,bob:Math.random()*6.28,flash:0,laneY,
+    healRate:s.healRate||0,minRng:s.minRng||0};
 }
 function counterMult(att,def){
+  if(def.kind==="siege"&&(att.kind==="melee"||att.kind==="air"))return 1.5;
   if(COUNTER[att.kind]===def.kind)return 1.5;
   if(COUNTER[def.kind]===att.kind)return 0.66;
   if(AIR_BONUS[att.kind]===def.kind)return 1.5; // ranged vs air, air vs heavy
@@ -94,21 +98,24 @@ function dmgTakenMult(tgt){
 const VET_DMG_MULT={1:1,2:1.08,3:1.15};
 function applyVeterancy(u,kind,lvl){
   u.vetLvl=lvl;
-  u.dmg*=VET_DMG_MULT[lvl]||1;
+  if(kind==="healer")u.healMult=VET_DMG_MULT[lvl]||1;
+  else u.dmg*=VET_DMG_MULT[lvl]||1;
   if(lvl>=3){
     if(kind==="melee")u.vetDefMult=0.95; // +5% def -> -5% daño recibido
     else if(kind==="ranged")u.rng*=1.1; // +10% alcance
     else if(kind==="heavy")u.atk*=0.9; // -10% cd de ataque (ataca más seguido)
     else if(kind==="air")u.spd*=1.1; // +10% velocidad
+    else if(kind==="healer")u.rng*=1.1; // +10% radio de curación
+    else if(kind==="siege")u.atk*=0.9; // -10% cd de ataque
   }
 }
 function applyVeterancyGains(){
-  const nombres={melee:"cuerpo a cuerpo",ranged:"a distancia",heavy:"pesado",air:"aéreo"};
+  const nombres={melee:"cuerpo a cuerpo",ranged:"a distancia",heavy:"pesado",air:"aéreo",healer:"sanador",siege:"asedio"};
   for(const side of["1","-1"]){
     const S=B.S[side],f=F[S.fac];
     const won=(side==="1")===B.result;
     if(!f.veterancy)f.veterancy=nuevaVeterancia();
-    for(const kind of["melee","ranged","heavy","air"]){
+    for(const kind of["melee","ranged","heavy","air","healer","siege"]){
       const spawned=S.spawnedTypes[kind]||0;
       if(!spawned)continue;
       const kills=S.killsByType[kind]||0;
@@ -176,14 +183,14 @@ function openBattle(from,to,mode){
     last:performance.now(),
     S:{
       "1":{fac:pFacId,gold:80,income:9+pFac.upEco*1.4,
-        cool:{melee:0,ranged:0,heavy:0,champ:0,spec:0,heroAbil:0,air:0},champAlive:false,
+        cool:{melee:0,ranged:0,heavy:0,healer:0,siege:0,champ:0,spec:0,heroAbil:0,air:0},champAlive:false,
         spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
-        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0},killsByType:{melee:0,ranged:0,heavy:0,air:0}},
+        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}},
       "-1":{fac:eFacId,gold:pvp?80:60,
         income:pvp?(9+eFac.upEco*1.4):(8+eFac.era*1.2)*diffMult,
-        cool:{melee:0,ranged:0,heavy:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20,air:0},champAlive:false,
+        cool:{melee:0,ranged:0,heavy:0,healer:0,siege:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20,air:0},champAlive:false,
         spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
-        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0},killsByType:{melee:0,ranged:0,heavy:0,air:0}}
+        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}}
     },
     eCool:0,turretT:0
   };
@@ -208,6 +215,7 @@ function openBattle(from,to,mode){
 
 function spawnUnit(side,kind){
   const P=B.S[side],f=F[P.fac];
+  if((kind==="healer"||kind==="siege")&&B.units.filter(u=>u.side===(+side)&&u.kind===kind).length>=2)return;
   if(kind==="air"){
     if(f.era<2)return; // Biplano llega en la Época Industrial
     if(B.units.filter(u=>u.side===(+side)&&u.kind==="air").length>=2)return; // máx. 2 por bando en campo
@@ -333,6 +341,12 @@ function buildBattleButtons(){
     }
     const vetTag=k=>{const lvl=veteranLevel((f.veterancy&&f.veterancy[k]?f.veterancy[k].xp:0));
       return lvl>1?` ${"★".repeat(lvl-1)}`:"";};
+    for(const k of["healer","siege"]){
+      const st=unitStats(k,f.era,f.upArm),b=document.createElement("button");b.className="ub";
+      b.innerHTML=`${k==="healer"?"✚":"💥"} ${UNIT_NAMES[f.era][k]}${vetTag(k)}<small>${st.cost}🪙 · máx. 2</small><div class="cdo"></div>`;
+      b.onclick=()=>spawnUnit(side,k);box.appendChild(b);
+      B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:k});
+    }
     for(const k of["melee","ranged","heavy"]){
       const st=unitStats(k,f.era,f.upArm);
       const b=document.createElement("button");b.className="ub";
@@ -390,6 +404,15 @@ function enemyAI(dt){
     if(hero&&hero.habilidad&&hero.habilidad.tipo==="activa")useHeroAbility("-1");
   }
   if(B.eCool>0)return;
+  const heridos=B.units.some(u=>u.side===-1&&u.kind!=="healer"&&u.hp>0&&u.hp<u.max);
+  if(heridos&&Math.random()<0.3){
+    const goldAntes=P.gold;spawnUnit("-1","healer");
+    if(P.gold<goldAntes){B.eCool=0.7+Math.random()*0.9;return;}
+  }
+  if(Math.random()<0.25){
+    const goldAntes=P.gold;spawnUnit("-1","siege");
+    if(P.gold<goldAntes){B.eCool=0.7+Math.random()*0.9;return;}
+  }
   if(eF.era>=2&&Math.random()<0.2){ // la IA también usa unidades aéreas, mismas reglas y límites
     const goldAntes=P.gold;
     spawnUnit("-1","air");
@@ -491,6 +514,31 @@ function bloop(now){
         }
         u.lastCheckX=u.x;u.idleCheckT=0;u.attackedInWindow=false;
       }
+      if(u.kind==="healer"){
+        const allies=B.units.filter(v=>{
+          if(v===u||v.side!==u.side||v.kind==="healer"||v.hp<=0||v.hp>=v.max||Math.abs(v.x-u.x)>u.rng)return false;
+          const asignado=B.units.filter(h=>h.side===u.side&&h.kind==="healer"&&h.hp>0&&Math.abs(v.x-h.x)<=h.rng)
+            .sort((a,b)=>Math.abs(v.x-a.x)-Math.abs(v.x-b.x))[0];
+          return asignado===u; // curación no apilable: un solo sanador por aliado
+        });
+        if(u.t<=0&&allies.length){
+          u.t=u.atk;
+          for(const v of allies){
+            const heroMult=v.kind==="champ"?0.5:1,wearMult=B.pacing.desgaste?0.5:1;
+            const amount=Math.min(v.max-v.hp,v.max*u.healRate*u.atk*(u.healMult||1)*heroMult*wearMult);
+            if(amount<=0)continue;
+            v.hp+=amount;v.flash=0.12;
+            B.projs.push({x:u.x,y:GROUND-24*u.size,tx:v.x,ty:GROUND-30*v.size,t:0.18,c:"#7ED66E"});
+            B.dmgs.push({x:v.x,y:GROUND-54*v.size,txt:"+"+Math.max(1,Math.round(amount)),t:0.6,c:"#7ED66E"});
+          }
+        }
+        if(allies.length)u.attackedInWindow=true;
+        else{
+          const delante=B.units.find(v=>v!==u&&v.side===u.side&&v.kind!=="healer"&&v.hp>0&&(v.x-u.x)*u.side>0&&(v.x-u.x)*u.side<48);
+          if(!delante)u.x+=u.spd*u.side*dt;
+        }
+        continue; // soporte puro: nunca busca ni ataca enemigos
+      }
       // Melee y heavy no alcanzan aéreos (inmunidad): se filtran de su lista
       // de enemigos válidos, tanto para atacar como para bloquear su avance.
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&
@@ -499,7 +547,8 @@ function bloop(now){
       if(u.kind==="melee"){
         // Enfrentamiento en arco (formaciones): hasta 3 melee por objetivo;
         // el 4º busca el siguiente enemigo más cercano en vez de amontonarse.
-        const candidatos=foes.filter(v=>(v.x-u.x)*u.side>0).sort((a,b)=>Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
+        const candidatos=foes.filter(v=>(v.x-u.x)*u.side>0).sort((a,b)=>
+          (b.kind==="healer")-(a.kind==="healer")||Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
         for(const v of candidatos){
           const enganchados=B.units.filter(w=>w!==u&&w.kind==="melee"&&w.side===u.side&&w.hp>0&&Math.abs(w.x-v.x)<=w.rng+4).length;
           if(enganchados<3){tgt=v;dist=Math.abs(v.x-u.x);break;}
@@ -509,12 +558,21 @@ function bloop(now){
         // Objetivo aéreo: prioriza heavy enemigo; si no hay, ✈️ vs ✈️ también
         // es un enfrentamiento válido (matriz ✈️vs✈️ ×1); si no hay ninguno
         // de los dos, ignora el resto de unidades terrestres y va por la base.
-        const candidatos=foes.filter(v=>(v.kind==="heavy"||v.kind==="air")&&(v.x-u.x)*u.side>0)
-          .sort((a,b)=>{if(a.kind!==b.kind)return a.kind==="heavy"?-1:1;return Math.abs(a.x-u.x)-Math.abs(b.x-u.x);});
+        const candidatos=foes.filter(v=>(v.kind==="heavy"||v.kind==="siege"||v.kind==="air")&&(v.x-u.x)*u.side>0)
+          .sort((a,b)=>{const pr={heavy:0,siege:1,air:2};return pr[a.kind]-pr[b.kind]||Math.abs(a.x-u.x)-Math.abs(b.x-u.x);});
         tgt=candidatos[0]||null;
         dist=tgt?Math.abs(tgt.x-u.x):Infinity;
+      }else if(u.kind==="siege"){
+        const enemyBase=u.side===1?W-58:58,bd=(enemyBase-u.x)*u.side;
+        if(bd>u.rng+18){
+          const candidatos=foes.filter(v=>v.kind!=="air"&&(v.x-u.x)*u.side>=u.minRng)
+            .sort((a,b)=>(b.kind==="healer")-(a.kind==="healer")||Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
+          tgt=candidatos[0]||null;dist=tgt?Math.abs(tgt.x-u.x):Infinity;
+        }
       }else{
-        for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
+        const candidatos=foes.filter(v=>(v.x-u.x)*u.side>0).sort((a,b)=>
+          (b.kind==="healer")-(a.kind==="healer")||Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
+        tgt=candidatos[0]||null;dist=tgt?Math.abs(tgt.x-u.x):Infinity;
       }
       const baseX=u.side===1?W-58:58;
       const baseD=(baseX-u.x)*u.side;
@@ -537,6 +595,12 @@ function bloop(now){
           B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:Math.round(dm),t:0.6,
             c:mult>1?"#FFD866":(mult<1?"#9FB3BE":"#F4E9C8")});
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:tgt.x,ty:GROUND-16,t:0.2});
+          if(u.kind==="siege"){
+            const nearby=B.units.filter(v=>v!==tgt&&v.side===tgt.side&&v.kind!=="air"&&v.hp>0&&Math.abs(v.x-tgt.x)<32);
+            for(const v of nearby){const spl=u.dmg*0.35*dmgMultOut*dmgTakenMult(v);v.hp-=spl;v.flash=0.12;
+              B.dmgs.push({x:v.x,y:GROUND-50*v.size,txt:Math.round(spl),t:0.6,c:"#D9A441"});}
+            const p=B.projs[B.projs.length-1];if(p)p.arc=true;
+          }
           if(u.heroId==="tomoegozen"){ // Danza de la Naginata: golpe en área pequeña
             const nearby=B.units.filter(v=>v!==tgt&&v.side===tgt.side&&v.hp>0&&Math.abs(v.x-tgt.x)<28);
             for(const v of nearby){
@@ -568,7 +632,7 @@ function bloop(now){
             }
           }
         }
-      }else if(!tgt&&baseD<=u.rng+18){
+      }else if(!tgt&&baseD<=u.rng+18&&baseD>=(u.minRng||0)){
         u.attackedInWindow=true; // atacando la base: no cuenta para el anti-atoro
         if(u.t<=0){u.t=u.atk;
           const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
@@ -577,8 +641,9 @@ function bloop(now){
           else{B.pHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           B.S[String(u.side)].dmgDealt+=dmgToBase;
           SFX.hit();
-          if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2});}
+          if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2,arc:u.kind==="siege"});}
       }else{
+        if(u.kind==="siege"&&baseD<u.minRng)continue; // demasiado cerca: el asedio queda anulado
         const spdMult=(B.S[String(u.side)].spdBuffT>0)?1.2:1; // Boudica: Carga Furiosa (6s)
         // El bloqueo por aliado-delante y la separación por apilado solo
         // cuentan entre unidades del MISMO carril (laneY cercano) — así el
@@ -638,7 +703,8 @@ function bloop(now){
     }
     else{const st=unitStats(r.kind,f.era,f.upArm);
       const airLleno=r.kind==="air"&&B.units.filter(u=>u.side===(+r.side)&&u.kind==="air").length>=2;
-      r.el.disabled=B.over||P.gold<st.cost||P.cool[r.kind]>0||airLleno;
+      const apoyoLleno=(r.kind==="healer"||r.kind==="siege")&&B.units.filter(u=>u.side===(+r.side)&&u.kind===r.kind).length>=2;
+      r.el.disabled=B.over||P.gold<st.cost||P.cool[r.kind]>0||airLleno||apoyoLleno;
       r.cd.style.height=(P.cool[r.kind]/st.cd*100)+"%";}
   }
   if(B)requestAnimationFrame(bloop);
@@ -662,6 +728,11 @@ function drawStick(u){
     bx.beginPath();bx.moveTo(15*s,0);bx.lineTo(-9*s,-5*s);bx.lineTo(-3*s,0);bx.lineTo(-9*s,5*s);bx.closePath();bx.fill();
     bx.strokeStyle=shade(facC,-15);bx.lineWidth=1.6*s*trazo;
     bx.beginPath();bx.moveTo(0,-13*s);bx.lineTo(0,13*s);bx.stroke(); // silueta del ala
+    bx.restore();
+  }else if(u.kind==="siege"){
+    bx.fillStyle="#4A443A";bx.fillRect(-15*s,-12*s,30*s,8*s);
+    bx.fillStyle=c;bx.beginPath();bx.arc(-10*s,-3*s,5*s,0,7);bx.arc(10*s,-3*s,5*s,0,7);bx.fill();
+    bx.strokeStyle="#D8CBA8";bx.lineWidth=3*s*trazo;bx.beginPath();bx.moveTo(-5*s,-13*s);bx.lineTo(22*s,-29*s);bx.stroke();
     bx.restore();
   }else if(u.kind==="heavy"&&u.era>=3){ // tanque
     // orugas
@@ -715,6 +786,9 @@ function drawStick(u){
   }
   bx.fillStyle="rgba(0,0,0,.5)";bx.fillRect(x-12,g-flyOff-46*u.size,24,3);
   bx.fillStyle="#7ED66E";bx.fillRect(x-12,g-flyOff-46*u.size,24*Math.max(0,u.hp/u.max),3);
+  if(u.kind==="healer"){
+    bx.fillStyle="#7ED66E";bx.fillRect(x-5,g-72*u.size,10,3);bx.fillRect(x-1.5,g-75.5*u.size,3,10);
+  }
   // Rasgos visuales de veteranía (Fase 2D) — SOLO cosméticos, la ventaja
   // real ya está aplicada en applyVeterancy(); esto solo comunica estatus.
   if(u.vetLvl>=2&&diffMult>=1){
@@ -779,9 +853,10 @@ function drawBattle(){
   drawBase(50,1,B.pHP,B.pMax,pLvl,FACTIONS[B.pFacId].color);
   drawBase(W-50,-1,B.eHP,B.eMax,eLvl,FACTIONS[B.eFacId].color);
   for(const u of B.units)drawStick(u);
-  bx.strokeStyle="#F4E9C8";bx.lineWidth=2;
-  for(const p of B.projs){bx.beginPath();bx.moveTo(p.x,p.y);
-    bx.lineTo(p.x+(p.tx-p.x)*0.35,p.y+(p.ty-p.y)*0.35);bx.stroke();}
+    bx.strokeStyle="#F4E9C8";bx.lineWidth=2;
+    for(const p of B.projs){bx.beginPath();bx.moveTo(p.x,p.y);bx.strokeStyle=p.c||"#F4E9C8";
+    if(p.arc)bx.quadraticCurveTo((p.x+p.tx)/2,Math.min(p.y,p.ty)-70,p.tx,p.ty);
+    else bx.lineTo(p.x+(p.tx-p.x)*0.35,p.y+(p.ty-p.y)*0.35);bx.stroke();}
   for(const p of B.pufs){bx.globalAlpha=Math.min(1,p.t*2);bx.fillStyle=p.c;
     bx.fillRect(p.x,p.y,p.s,p.s);bx.globalAlpha=1;}
   bx.textAlign="center";bx.font="700 13px Segoe UI";
