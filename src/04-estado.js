@@ -104,6 +104,11 @@ const $=id=>document.getElementById(id);
 function setStatus(h){$("status").innerHTML=h;}
 function log(m,c=""){const d=document.createElement("div");d.textContent=`[R${round}] ${m}`;
   d.className=(c?c+" ":"")+"logNew";$("log").prepend(d);}
+// Líneas causales de la ronda (ataques, conquistas, diplomacia, plagas,
+// desbloqueos) para el Resumen del turno — adelanto de 2E, pilar 6/7.
+// turnSummaryLines se reinicia al empezar cada ronda (startRound).
+let turnSummaryLines=[];
+function logCausal(m,c=""){log(m,c);if(turnSummaryLines.length<20)turnSummaryLines.push({m,c});}
 function ownedBy(f){return Object.keys(T).filter(id=>T[id].owner===f);}
 function alive(){return[...new Set(Object.values(T).map(t=>t.owner))];}
 function pactBetween(a,b){return pacts.find(p=>p.rounds>0&&((p.a===a&&p.b===b)||(p.a===b&&p.b===a)));}

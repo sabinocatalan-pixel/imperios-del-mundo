@@ -30,7 +30,7 @@ function incomePhase(){
   const plagueChance=0.07*(scenario&&scenario.plagueX?scenario.plagueX:1);
   if(Math.random()<plagueChance){
     const ids=Object.keys(T),v=ids[Math.floor(Math.random()*ids.length)];
-    if(T[v].plague===0){T[v].plague=2;log(`☣ Brote de peste en ${TERR[v].n}.`,"loss");}
+    if(T[v].plague===0){T[v].plague=2;logCausal(`☣ Brote de peste en ${TERR[v].n}.`,"loss");}
   }
   const pf=F[player];
   if(pf&&pf.faith>=100&&Math.random()<0.15){
@@ -41,7 +41,7 @@ function incomePhase(){
   }
   pacts.forEach(p=>p.rounds--);
   pacts=pacts.filter(p=>{if(p.rounds<=0&&(p.a===player||p.b===player))
-    log(`El ${p.type==="ali"?"tratado de alianza":"pacto"} con ${FACTIONS[p.a===player?p.b:p.a].name} expiró.`);
+    logCausal(`El ${p.type==="ali"?"tratado de alianza":"pacto"} con ${FACTIONS[p.a===player?p.b:p.a].name} expiró.`);
     return p.rounds>0;});
   checkContinentMission();
 }

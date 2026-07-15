@@ -3,6 +3,7 @@
 /* ==================== TURNOS ==================== */
 function startPlayerTurn(){startRound();} // alias para compatibilidad
 function startRound(){
+  turnSummaryLines=[]; // nueva ronda: reinicia lo que verá el Resumen del turno
   autoSaveGame();
   incomePhase();
   if(checkEnd())return;
@@ -47,6 +48,24 @@ function resolveOffer(accept){
   }
   render();
 }
+/* ==================== RESUMEN DEL TURNO ====================
+   Adelanto de la Fase 2E (pilar 6/7): panel compacto tras la fase IA,
+   3-6 líneas causales (turnSummaryLines, ver 04-estado.js), auto-cierra
+   a los ~6s o al tocar. El log detallado de abajo sigue igual, sin
+   recortes — esto es solo un resumen legible encima. */
+let turnSummaryTimer=null;
+function showTurnSummary(){
+  if(!turnSummaryLines.length)return; // ronda sin eventos causales: no molestar con un panel vacío
+  const lines=turnSummaryLines.slice(0,6);
+  $("resumenBody").innerHTML=lines.map(l=>`<div class="resumenLinea ${l.c||""}">${l.m}</div>`).join("");
+  $("resumenModal").style.display="flex";
+  clearTimeout(turnSummaryTimer);
+  turnSummaryTimer=setTimeout(closeTurnSummary,6000);
+}
+function closeTurnSummary(){
+  clearTimeout(turnSummaryTimer);
+  $("resumenModal").style.display="none";
+}
 function aiTurns(fromTurnFlow){
   if(inBattle)return;
   if(!fromTurnFlow&&phase!=="play")return;
@@ -55,7 +74,7 @@ function aiTurns(fromTurnFlow){
   const enemies=alive().filter(x=>!humans.includes(x));let i=0;
   function step(){
     if(inBattle){aiCont=step;return;} // pausa si hay batalla de defensa
-    if(i>=enemies.length){round++;if(!checkEnd())startRound();return;}
+    if(i>=enemies.length){round++;showTurnSummary();if(!checkEnd())startRound();return;}
     const fid=enemies[i++],f=F[fid],P=FACTIONS[fid];
     const mineAll=ownedBy(fid);
     if(!mineAll.length){setTimeout(step,80);return;} // facción eliminada durante la ronda
@@ -87,8 +106,10 @@ function aiTurns(fromTurnFlow){
       const tgt=hv[Math.floor(Math.random()*hv.length)];
       if(tgt&&!pactBetween(fid,tgt)){
         const stronger=mineAll.length>ownedBy(tgt).length;
-        if(!stronger&&relGet(fid,tgt)>-40)pendingOffer={from:fid,to:tgt,type:"nap"};
-        else if(stronger&&P.aggr>0.5)pendingOffer={from:fid,to:tgt,type:"demand",gold:20};
+        if(!stronger&&relGet(fid,tgt)>-40){pendingOffer={from:fid,to:tgt,type:"nap"};
+          logCausal(`🕊 ${P.name} te propondrá un pacto de no agresión.`);}
+        else if(stronger&&P.aggr>0.5){pendingOffer={from:fid,to:tgt,type:"demand",gold:20};
+          logCausal(`⚠️ ${P.name} te exigirá tributo.`);}
       }
     }
     // decidir ataque (personalidad + pactos + relación)
@@ -105,14 +126,14 @@ function aiTurns(fromTurnFlow){
           arrowFX(from,to);
           if(humans.includes(T[to].owner)){
             // ¡defensa en vivo del humano dueño!
-            log(`⚔️ ¡${P.name} ataca ${TERR[to].n}! Defiende tu territorio.`,"loss");
+            logCausal(`⚔️ ¡${P.name} ataca ${TERR[to].n}! Defiende tu territorio.`,"loss");
             openBattle(from,to,"defense");
             done=true;aiCont=step;render();return;
           }
           const r=autoBattle(from,to);
           relAdd(fid,T[to].owner,-15);
-          if(r.win){flashTerr(to);log(`${FACTIONS[fid].emb} ${P.name} conquistó ${TERR[to].n}.`);}
-          else log(`${P.name} fue rechazado en ${TERR[to].n}.`);
+          if(r.win){flashTerr(to);logCausal(`${FACTIONS[fid].emb} ${P.name} conquistó ${TERR[to].n}.`);}
+          else logCausal(`${P.name} fue rechazado en ${TERR[to].n}.`);
           done=true;break;
         }
       }

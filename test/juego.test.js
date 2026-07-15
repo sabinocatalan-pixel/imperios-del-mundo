@@ -534,6 +534,36 @@ test("Ranged atorado: se reposiciona tras ~1s si un aliado le bloquea el avance"
   } finally { closeGame(g); }
 });
 
+/* 19 (adelanto de Fase 2E, pilar 6/7). Resumen del turno: panel compacto
+   con máx. 6 líneas causales, no aparece si no hay eventos, y se reinicia
+   al empezar una ronda nueva. */
+test("Resumen del turno: se genera con máx. 6 líneas causales", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+
+    // Simula 8 eventos causales en la misma ronda (más del límite de 6).
+    g.win.eval('for(let i=0;i<8;i++) logCausal("evento de prueba "+i);');
+    assert.strictEqual(g.win.eval('turnSummaryLines.length'), 8, "logCausal debe seguir registrando todos, el recorte es solo al mostrar");
+
+    g.win.eval('showTurnSummary()');
+    assert.strictEqual(g.doc.getElementById("resumenModal").style.display, "flex");
+    const lineas=g.win.eval('document.querySelectorAll("#resumenBody .resumenLinea").length');
+    assert.strictEqual(lineas, 6, "el panel no debe mostrar más de 6 líneas");
+
+    // Sin eventos causales no debe aparecer ningún panel (evita ruido cada ronda).
+    g.win.eval('closeTurnSummary(); turnSummaryLines=[];');
+    g.win.eval('showTurnSummary()');
+    assert.strictEqual(g.doc.getElementById("resumenModal").style.display, "none");
+
+    // Se reinicia al empezar una ronda nueva.
+    g.win.eval('Math.random=()=>0.99;'); // evita que una plaga al azar contamine el conteo
+    g.win.eval('turnSummaryLines=["algo"]; startRound();');
+    assert.strictEqual(g.win.eval('turnSummaryLines.length'), 0);
+  } finally { closeGame(g); }
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
