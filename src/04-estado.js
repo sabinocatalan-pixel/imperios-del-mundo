@@ -102,7 +102,8 @@ function scenarioFail(why){
 /* ==================== HELPERS ==================== */
 const $=id=>document.getElementById(id);
 function setStatus(h){$("status").innerHTML=h;}
-function log(m,c=""){const d=document.createElement("div");d.textContent=`[R${round}] ${m}`;if(c)d.className=c;$("log").prepend(d);}
+function log(m,c=""){const d=document.createElement("div");d.textContent=`[R${round}] ${m}`;
+  d.className=(c?c+" ":"")+"logNew";$("log").prepend(d);}
 function ownedBy(f){return Object.keys(T).filter(id=>T[id].owner===f);}
 function alive(){return[...new Set(Object.values(T).map(t=>t.owner))];}
 function pactBetween(a,b){return pacts.find(p=>p.rounds>0&&((p.a===a&&p.b===b)||(p.a===b&&p.b===a)));}

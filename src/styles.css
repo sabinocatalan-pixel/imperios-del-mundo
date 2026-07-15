@@ -67,11 +67,14 @@
   button.gold:active{background:var(--gold)!important;color:var(--ocean)}
   button.danger{border-color:var(--danger)!important;color:#E58B80}
   button.danger:active{background:var(--danger)!important;color:#fff}
-  #log{width:100%;max-width:1080px;padding:3px 14px 24px;font-size:12px;opacity:.88;
+  #log{width:100%;max-width:1080px;padding:3px 14px 24px;font-size:13px;opacity:.88;
     max-height:130px;overflow-y:auto;line-height:1.5}
   #log div{border-left:2px solid var(--line);padding-left:9px;margin-bottom:2px}
   #log .win{border-left-color:var(--gold);color:var(--gold)}
   #log .loss{border-left-color:var(--danger)}
+  #log div.logNew{animation:logFlash 1s ease-out}
+  @keyframes logFlash{0%{background:rgba(217,164,65,.35)}100%{background:transparent}}
+  @media(prefers-reduced-motion:reduce){#log div.logNew{animation:none}}
   #confetti{position:fixed;inset:0;pointer-events:none;z-index:95}
   .modal{position:fixed;inset:0;background:rgba(8,16,22,.93);display:none;align-items:center;
     justify-content:center;flex-direction:column;z-index:85;text-align:center;
