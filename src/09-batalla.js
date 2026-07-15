@@ -103,6 +103,7 @@ function applyVeterancy(u,kind,lvl){
   }
 }
 function applyVeterancyGains(){
+  const nombres={melee:"cuerpo a cuerpo",ranged:"a distancia",heavy:"pesado",air:"aéreo"};
   for(const side of["1","-1"]){
     const S=B.S[side],f=F[S.fac];
     const won=(side==="1")===B.result;
@@ -112,12 +113,21 @@ function applyVeterancyGains(){
       if(!spawned)continue;
       const kills=S.killsByType[kind]||0;
       const v=f.veterancy[kind];
-      v.xp=Math.min(80,v.xp+spawned*2+kills*1+(won?4:0));
+      const nivelAntes=veteranLevel(v.xp);
+      // Participar concede +2 una sola vez al regimiento (no por cada
+      // unidad desplegada); victoria y bajas también son XP compartida.
+      v.xp=Math.min(80,v.xp+2+kills+(won?4:0));
       // Derrota con muchas bajas (más de la mitad de lo desplegado de ese
       // tipo): -20% de la barra acumulada.
       const vivos=B.units.filter(u=>u.side===(side==="1"?1:-1)&&u.kind===kind&&u.hp>0).length;
       const bajas=spawned-vivos;
       if(!won&&bajas>spawned/2)v.xp=Math.max(0,v.xp-Math.round(v.xp*0.2));
+      const nivelDespues=veteranLevel(v.xp);
+      if(nivelDespues!==nivelAntes){
+        const verbo=nivelDespues>nivelAntes?"alcanzó":"descendió a";
+        logCausal(`⭐ El regimiento ${nombres[kind]} de ${fname(S.fac)} ${verbo} Veteranía Nv${nivelDespues} (${v.xp} XP).`,
+          nivelDespues>nivelAntes?"win":"loss");
+      }
     }
   }
 }
@@ -642,12 +652,13 @@ function drawStick(u){
   const bobY=Math.sin(u.bob)*1.5;
   const walk=Math.sin(u.bob*1.6)*4*s;             // balanceo de piernas
   const flyOff=u.kind==="air"?90:0;               // vuelan a GROUND-90
+  const trazo=u.vetLvl>=3?1.1:1;                  // Nv3: trazo cosmético +10%
   bx.save();bx.translate(x,g-flyOff+bobY+(u.laneY||0));bx.scale(u.side,1); // carril de profundidad (formaciones)
-  bx.strokeStyle=c;bx.fillStyle=c;bx.lineWidth=2.4*s;bx.lineCap="round";
+  bx.strokeStyle=c;bx.fillStyle=c;bx.lineWidth=2.4*s*trazo;bx.lineCap="round";
   if(u.kind==="air"){ // avión: fuselaje simple + alas
     bx.fillStyle=c;
     bx.beginPath();bx.moveTo(15*s,0);bx.lineTo(-9*s,-5*s);bx.lineTo(-3*s,0);bx.lineTo(-9*s,5*s);bx.closePath();bx.fill();
-    bx.strokeStyle=shade(facC,-15);bx.lineWidth=1.6*s;
+    bx.strokeStyle=shade(facC,-15);bx.lineWidth=1.6*s*trazo;
     bx.beginPath();bx.moveTo(0,-13*s);bx.lineTo(0,13*s);bx.stroke(); // silueta del ala
     bx.restore();
   }else if(u.kind==="heavy"&&u.era>=3){ // tanque
@@ -665,7 +676,7 @@ function drawStick(u){
     // torreta y cañón
     bx.fillStyle=shade(facC,20);
     bx.beginPath();bx.arc(0,-18*s,6*s,Math.PI,0);bx.fill();
-    bx.strokeStyle=shade(facC,-25);bx.lineWidth=2.6*s;bx.lineCap="round";
+    bx.strokeStyle=shade(facC,-25);bx.lineWidth=2.6*s*trazo;bx.lineCap="round";
     bx.beginPath();bx.moveTo(4*s,-20*s);bx.lineTo(26*s,-22*s);bx.stroke();
     if(lunge>0){bx.fillStyle="#FFE28A";
       bx.beginPath();bx.arc(29*s,-22*s,4.5*s,0,7);bx.fill();}
@@ -683,8 +694,8 @@ function drawStick(u){
     bx.fillStyle=c;
     // brazo
     bx.beginPath();bx.moveTo(0,-25*s);bx.lineTo(9*s,-22*s);bx.stroke();
-    bx.strokeStyle=u.flash>0?"#fff":"#D8CBA8";bx.lineWidth=2*s;
-    if(u.kind==="champ"){bx.strokeStyle="#FFD866";bx.lineWidth=3*s;
+    bx.strokeStyle=u.flash>0?"#fff":"#D8CBA8";bx.lineWidth=2*s*trazo;
+    if(u.kind==="champ"){bx.strokeStyle="#FFD866";bx.lineWidth=3*s*trazo;
       bx.beginPath();bx.moveTo(9*s,-22*s);bx.lineTo(22*s,-34*s);bx.stroke();
       bx.fillStyle="#FFD866";bx.beginPath();bx.arc(0,-40*s,2.5*s,0,7);bx.fill();
     }else if(u.era===0){bx.beginPath();bx.moveTo(9*s,-22*s);bx.lineTo(17*s,-30*s);bx.stroke();}
@@ -705,12 +716,14 @@ function drawStick(u){
   // Rasgos visuales de veteranía (Fase 2D) — SOLO cosméticos, la ventaja
   // real ya está aplicada en applyVeterancy(); esto solo comunica estatus.
   if(u.vetLvl>=2){
-    bx.fillStyle=u.vetLvl>=3?"#FFD866":FACTIONS[u.side===1?B.pFacId:B.eFacId].color;
-    bx.beginPath();bx.arc(x,g-flyOff-52*u.size,2.6*u.size,0,7);bx.fill();
-  }
-  if(u.vetLvl>=3){
-    bx.strokeStyle="#FFD866";bx.lineWidth=1.6;
-    bx.beginPath();bx.moveTo(x,g-flyOff-55*u.size);bx.lineTo(x,g-flyOff-63*u.size);bx.stroke();
+    const dorado=u.vetLvl>=3,fy=g-flyOff-54*u.size;
+    bx.strokeStyle=dorado?"#FFD866":"#D8CBA8";bx.lineWidth=dorado?1.8:1.3;
+    bx.beginPath();bx.moveTo(x,fy);bx.lineTo(x,fy-(dorado?14:10)*u.size);bx.stroke();
+    bx.fillStyle=dorado?"#FFD866":FACTIONS[u.side===1?B.pFacId:B.eFacId].color;
+    bx.beginPath();bx.moveTo(x,fy-(dorado?14:10)*u.size);
+    bx.lineTo(x+u.side*(dorado?10:7)*u.size,fy-(dorado?11:7)*u.size);
+    bx.lineTo(x,fy-(dorado?8:4)*u.size);bx.closePath();bx.fill();
+    if(dorado){bx.beginPath();bx.arc(x,fy-17*u.size,2.4*u.size,0,7);bx.fill();}
   }
 }
 function drawCorpse(cp){
