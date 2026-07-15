@@ -355,7 +355,14 @@ function bloop(now){
       const baseX=u.side===1?W-58:58;
       const baseD=(baseX-u.x)*u.side;
       const dmgMultOut=(B.S[String(u.side)].dmgBuffAllT>0)?1.15:1; // Ollantay: al morir, +15% daño 8s
-      if(tgt&&dist<=u.rng){
+      // Dos héroes activos siguen cerrando distancia hasta quedar a ≤60px
+      // (zona de duelo) en vez de trabarse en combate normal a rng=140;
+      // si no, con ese alcance jamás llegarían a la distancia del duelo.
+      // Una vez usado el único duelo de la batalla, vuelven a engancharse
+      // como cualquier otro enfrentamiento.
+      const champVsChamp=tgt&&u.kind==="champ"&&tgt.kind==="champ"&&!B.duelDone;
+      const engageRng=champVsChamp?60:u.rng;
+      if(tgt&&dist<=engageRng){
         if(u.t<=0){u.t=u.atk;
           const mult=counterMult(u,tgt);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);

@@ -86,7 +86,7 @@ const HEROES = {
   amaru: {
     id: "amaru", name: "Amaru", region: "Andes (mito)", rarity: "mitico",
     tipoAtaque: "ranged", locked: true,
-    habilidad: { tipo: "activa", nombre: "Renacer de la Serpiente", desc: "1 vez/batalla: al morir renace con 50% PV + onda que aturde 1.5s" },
+    habilidad: { tipo: "pasiva", nombre: "Renacer de la Serpiente", desc: "1 vez/batalla: al morir renace con 50% PV + onda que aturde 1.5s" },
     frase: "La serpiente que muere, siempre renace.",
     leyenda: "???",
     notaCultural: "Inspirado en la mitología andina; representación lúdica y educativa, no documental.",

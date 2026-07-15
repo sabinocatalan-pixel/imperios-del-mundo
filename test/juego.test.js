@@ -380,6 +380,40 @@ test("Duelo de Campeones: máx. 1 por batalla, perdedor no muere, recompensa apl
   } finally { closeGame(g); }
 });
 
+/* 15 (Fase 2B, regresión). El duelo debe dispararse en PvP dejando que el
+   motor mueva a los dos héroes por su cuenta (sin teletransportarlos a
+   mano como en la prueba 14) — así se detecta si "champ" se traba en
+   combate normal a su rango (140px) antes de llegar a los 60px del duelo. */
+test("Duelo de Campeones: se dispara en PvP con movimiento normal (sin héroes teletransportados)", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('LEGACY.heroes.amaru=true;'); // desbloqueo de prueba para equiparlo en ambos bandos
+    g.win.eval('setPickMode(2)');
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // jugador 1 = AG
+    g.win.eval('clickTerr("EUN")'); // jugador 2 = CO
+    g.win.eval('setHeroSlot("AG",0,"amaru")');
+    g.win.eval('setHeroSlot("CO",0,"amaru")');
+    g.win.eval('endHumanTurn()'); // pasa el turno a CO
+    assert.strictEqual(g.win.eval('player'), 'CO');
+    g.win.eval('clickTerr("EUO")'); // territorio propio de CO
+    g.win.eval('clickTerr("USA")'); // vecino humano (AG) -> abre batalla pvp
+    assert.strictEqual(g.win.eval('B.pvp'), true);
+    g.win.eval('spawnChamp("1")');
+    g.win.eval('spawnChamp("-1")');
+    assert.strictEqual(g.win.eval('B.S["1"].champAlive'), true);
+    assert.strictEqual(g.win.eval('B.S["-1"].champAlive'), true);
+
+    let triggered = false;
+    for (let i = 0; i < 400 && !triggered; i++) {
+      g.win.eval('B.last = performance.now() - 50;'); // fuerza dt≈0.05s por paso, sin depender del reloj real
+      g.win.eval('bloop(performance.now())');
+      triggered = g.win.eval('!!B.duel || B.duelDone');
+    }
+    assert.ok(triggered, "el duelo debe dispararse cuando los dos héroes se acercan con movimiento normal");
+  } finally { closeGame(g); }
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
