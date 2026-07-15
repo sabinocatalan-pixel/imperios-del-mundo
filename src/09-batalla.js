@@ -48,12 +48,14 @@ function drawBG(){
 }
 const COUNTER={melee:"ranged",ranged:"heavy",heavy:"melee"}; // clave vence a valor
 const CARROW={melee:"🗡→🏹",ranged:"🏹→🛡",heavy:"🛡→🗡"};
+const AIR_BONUS={ranged:"air",air:"heavy"}; // 🏹→✈️ ×1.5 (antiaéreo) · ✈️→🛡 ×1.5
 
 function unitStats(kind,era,arm,wl){
   const m=Math.pow(1.75,era)*(1+arm*0.15);
   if(kind==="melee") return{hp:70*m, dmg:9*m, spd:40,rng:30, atk:0.75,cost:30, cd:1.5, size:1.25};
   if(kind==="ranged")return{hp:45*m, dmg:8*m, spd:34,rng:185+era*20,atk:1.1,cost:55, cd:3, size:1.25};
   if(kind==="heavy") return{hp:200*m,dmg:16*m,spd:22,rng:era>=3?66:34,atk:1.05,cost:110,cd:8, size:1.7};
+  if(kind==="air")   return{hp:55*m, dmg:12*m,spd:52,rng:90, atk:1,   cost:95, cd:10,size:1.35};
   if(kind==="champ")return{hp:340*(1+.45*wl)*Math.pow(1.3,era),dmg:28*(1+.4*wl)*Math.pow(1.3,era),
     spd:36,rng:140,atk:0.65,cost:0,cd:60,size:1.9};
 }
@@ -69,6 +71,7 @@ function mkUnit(side,kind,era,arm,wl){
 function counterMult(att,def){
   if(COUNTER[att.kind]===def.kind)return 1.5;
   if(COUNTER[def.kind]===att.kind)return 0.66;
+  if(AIR_BONUS[att.kind]===def.kind)return 1.5; // ranged vs air, air vs heavy
   return 1;
 }
 // Reducción de daño recibido por pasivas/activas de héroes (Leónidas, Pachacútec).
@@ -128,6 +131,10 @@ function openBattle(from,to,mode){
 
 function spawnUnit(side,kind){
   const P=B.S[side],f=F[P.fac];
+  if(kind==="air"){
+    if(f.era<2)return; // Biplano llega en la Época Industrial
+    if(B.units.filter(u=>u.side===(+side)&&u.kind==="air").length>=2)return; // máx. 2 por bando en campo
+  }
   const st=unitStats(kind,f.era,f.upArm);
   let cost=st.cost;
   if(f.heroes[0]==="suntzu"&&P.champAlive)cost=Math.round(cost*0.9); // Sun Tzu: -10% costo mientras vive
@@ -254,6 +261,14 @@ function buildBattleButtons(){
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:k});
     }
+    if(f.era>=2){ // unidades aéreas: Época Industrial en adelante
+      const st=unitStats("air",f.era,f.upArm);
+      const b=document.createElement("button");b.className="ub";
+      b.innerHTML=`✈️ ${UNIT_NAMES[f.era].air}<small>${st.cost}🪙 · máx. 2</small><div class="cdo"></div>`;
+      b.onclick=()=>spawnUnit(side,"air");
+      box.appendChild(b);
+      B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:"air"});
+    }
     const heroId=f.heroes[0],hero=heroId&&ALL_HEROES[heroId];
     if(hero){
       const b=document.createElement("button");b.className="ub gold";
@@ -294,6 +309,11 @@ function enemyAI(dt){
     if(hero&&hero.habilidad&&hero.habilidad.tipo==="activa")useHeroAbility("-1");
   }
   if(B.eCool>0)return;
+  if(eF.era>=2&&Math.random()<0.2){ // la IA también usa unidades aéreas, mismas reglas y límites
+    const goldAntes=P.gold;
+    spawnUnit("-1","air");
+    if(P.gold<goldAntes){B.eCool=0.7+Math.random()*0.9;return;}
+  }
   const affordable=["melee","ranged","heavy"].filter(k=>P.gold>=unitStats(k,eF.era,eF.upArm).cost);
   if(!affordable.length)return;
   let pick;
@@ -373,7 +393,10 @@ function bloop(now){
       u.stunT=Math.max(0,(u.stunT||0)-dt);
       if(u.stunT>0)continue; // aturdido (onda de Amaru): no ataca ni avanza
       if(B.duel&&(u===B.duel.h1||u===B.duel.h2||Math.abs(u.x-B.duel.mid)<140))continue; // duelo: pausa en 140px (también en el frame que se resuelve)
-      const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0);
+      // Melee y heavy no alcanzan aéreos (inmunidad): se filtran de su lista
+      // de enemigos válidos, tanto para atacar como para bloquear su avance.
+      const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&
+        !((u.kind==="melee"||u.kind==="heavy")&&v.kind==="air"));
       let tgt=null,dist=Infinity;
       if(u.kind==="melee"){
         // Enfrentamiento en arco (formaciones): hasta 3 melee por objetivo;
@@ -384,6 +407,14 @@ function bloop(now){
           if(enganchados<3){tgt=v;dist=Math.abs(v.x-u.x);break;}
         }
         if(!tgt&&candidatos.length){tgt=candidatos[0];dist=Math.abs(candidatos[0].x-u.x);} // todos con 3+: ataca igual al más cercano
+      }else if(u.kind==="air"){
+        // Objetivo aéreo: prioriza heavy enemigo; si no hay, ✈️ vs ✈️ también
+        // es un enfrentamiento válido (matriz ✈️vs✈️ ×1); si no hay ninguno
+        // de los dos, ignora el resto de unidades terrestres y va por la base.
+        const candidatos=foes.filter(v=>(v.kind==="heavy"||v.kind==="air")&&(v.x-u.x)*u.side>0)
+          .sort((a,b)=>{if(a.kind!==b.kind)return a.kind==="heavy"?-1:1;return Math.abs(a.x-u.x)-Math.abs(b.x-u.x);});
+        tgt=candidatos[0]||null;
+        dist=tgt?Math.abs(tgt.x-u.x):Infinity;
       }else{
         for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
       }
@@ -452,7 +483,8 @@ function bloop(now){
         // Separación (formaciones): no avanzar si ya hay un aliado del
         // mismo tipo a menos de 16px, para que no se apilen en un punto.
         const sameKindClose=B.units.find(v=>v!==u&&v.side===u.side&&v.kind===u.kind&&v.hp>0&&Math.abs(v.x-u.x)<16);
-        if((!ally||u.rng>60&&(ally.x-u.x)*u.side>40)&&!sameKindClose)u.x+=u.spd*spdMult*u.side*dt;
+        const ignoraBloqueo=u.kind==="air"; // vuela sobre el tráfico terrestre
+        if((ignoraBloqueo||!ally||u.rng>60&&(ally.x-u.x)*u.side>40)&&!sameKindClose)u.x+=u.spd*spdMult*u.side*dt;
       }
     }
     if(B.duel&&B.duel.resolved)B.duel=null; // recién ahora: el bucle de arriba ya respetó la pausa este frame
@@ -499,7 +531,8 @@ function bloop(now){
       r.cd.style.height=(P.cool.heroAbil/cd*100)+"%";
     }
     else{const st=unitStats(r.kind,f.era,f.upArm);
-      r.el.disabled=B.over||P.gold<st.cost||P.cool[r.kind]>0;
+      const airLleno=r.kind==="air"&&B.units.filter(u=>u.side===(+r.side)&&u.kind==="air").length>=2;
+      r.el.disabled=B.over||P.gold<st.cost||P.cool[r.kind]>0||airLleno;
       r.cd.style.height=(P.cool[r.kind]/st.cd*100)+"%";}
   }
   if(B)requestAnimationFrame(bloop);
@@ -514,9 +547,16 @@ function drawStick(u){
   const x=u.x+lunge*u.side;
   const bobY=Math.sin(u.bob)*1.5;
   const walk=Math.sin(u.bob*1.6)*4*s;             // balanceo de piernas
-  bx.save();bx.translate(x,g+bobY+(u.laneY||0));bx.scale(u.side,1); // carril de profundidad (formaciones)
+  const flyOff=u.kind==="air"?90:0;               // vuelan a GROUND-90
+  bx.save();bx.translate(x,g-flyOff+bobY+(u.laneY||0));bx.scale(u.side,1); // carril de profundidad (formaciones)
   bx.strokeStyle=c;bx.fillStyle=c;bx.lineWidth=2.4*s;bx.lineCap="round";
-  if(u.kind==="heavy"&&u.era>=3){ // tanque
+  if(u.kind==="air"){ // avión: fuselaje simple + alas
+    bx.fillStyle=c;
+    bx.beginPath();bx.moveTo(15*s,0);bx.lineTo(-9*s,-5*s);bx.lineTo(-3*s,0);bx.lineTo(-9*s,5*s);bx.closePath();bx.fill();
+    bx.strokeStyle=shade(facC,-15);bx.lineWidth=1.6*s;
+    bx.beginPath();bx.moveTo(0,-13*s);bx.lineTo(0,13*s);bx.stroke(); // silueta del ala
+    bx.restore();
+  }else if(u.kind==="heavy"&&u.era>=3){ // tanque
     // orugas
     bx.fillStyle="#2E2A22";
     bx.beginPath();bx.moveTo(-18*s,-2*s);bx.lineTo(18*s,-2*s);
@@ -566,8 +606,8 @@ function drawStick(u){
     }
     bx.restore();
   }
-  bx.fillStyle="rgba(0,0,0,.5)";bx.fillRect(x-12,g-46*u.size,24,3);
-  bx.fillStyle="#7ED66E";bx.fillRect(x-12,g-46*u.size,24*Math.max(0,u.hp/u.max),3);
+  bx.fillStyle="rgba(0,0,0,.5)";bx.fillRect(x-12,g-flyOff-46*u.size,24,3);
+  bx.fillStyle="#7ED66E";bx.fillRect(x-12,g-flyOff-46*u.size,24*Math.max(0,u.hp/u.max),3);
 }
 function drawCorpse(cp){
   bx.save();bx.globalAlpha=Math.min(0.8,cp.t);

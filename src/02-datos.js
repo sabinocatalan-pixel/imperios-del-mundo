@@ -58,7 +58,7 @@ const SPECIALS=["☄️ Lluvia de meteoros","🔥 Flechas de fuego","💣 Bombar
 const UNIT_NAMES=[
   {melee:"Guerrero",ranged:"Hondero",heavy:"Mamut"},
   {melee:"Espadachín",ranged:"Arquero",heavy:"Caballero"},
-  {melee:"Fusilero",ranged:"Mosquetero",heavy:"Cañón"},
-  {melee:"Soldado",ranged:"Francotirador",heavy:"Tanque"}
+  {melee:"Fusilero",ranged:"Mosquetero",heavy:"Cañón",air:"Biplano"},
+  {melee:"Soldado",ranged:"Francotirador",heavy:"Tanque",air:"Caza"}
 ];
 const CULT_WIN=250,FAITH_WIN=250;
