@@ -59,8 +59,12 @@ function unitStats(kind,era,arm,wl){
 }
 function mkUnit(side,kind,era,arm,wl){
   const s=unitStats(kind,era,arm,wl);
+  // Formaciones (Fase 2C): carril de profundidad -12/0/+12px + jitter ±4,
+  // para que avancen en un frente de hasta 3 en vez de fila india. Es
+  // puramente visual (drawStick) — el combate sigue siendo 1D sobre x.
+  const laneY=[-12,0,12][Math.floor(Math.random()*3)]+(Math.random()*8-4);
   return{side,kind,era,x:side===1?70:W-70,hp:s.hp,max:s.hp,dmg:s.dmg,spd:s.spd,
-    rng:s.rng,atk:s.atk,t:0,size:s.size,bob:Math.random()*6.28,flash:0};
+    rng:s.rng,atk:s.atk,t:0,size:s.size,bob:Math.random()*6.28,flash:0,laneY};
 }
 function counterMult(att,def){
   if(COUNTER[att.kind]===def.kind)return 1.5;
@@ -371,7 +375,18 @@ function bloop(now){
       if(B.duel&&(u===B.duel.h1||u===B.duel.h2||Math.abs(u.x-B.duel.mid)<140))continue; // duelo: pausa en 140px (también en el frame que se resuelve)
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0);
       let tgt=null,dist=Infinity;
-      for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
+      if(u.kind==="melee"){
+        // Enfrentamiento en arco (formaciones): hasta 3 melee por objetivo;
+        // el 4º busca el siguiente enemigo más cercano en vez de amontonarse.
+        const candidatos=foes.filter(v=>(v.x-u.x)*u.side>0).sort((a,b)=>Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
+        for(const v of candidatos){
+          const enganchados=B.units.filter(w=>w!==u&&w.kind==="melee"&&w.side===u.side&&w.hp>0&&Math.abs(w.x-v.x)<=w.rng+4).length;
+          if(enganchados<3){tgt=v;dist=Math.abs(v.x-u.x);break;}
+        }
+        if(!tgt&&candidatos.length){tgt=candidatos[0];dist=Math.abs(candidatos[0].x-u.x);} // todos con 3+: ataca igual al más cercano
+      }else{
+        for(const v of foes){const d=(v.x-u.x)*u.side;if(d>0&&d<dist){dist=d;tgt=v;}}
+      }
       const baseX=u.side===1?W-58:58;
       const baseD=(baseX-u.x)*u.side;
       const dmgMultOut=(B.S[String(u.side)].dmgBuffAllT>0)?1.15:1; // Ollantay: al morir, +15% daño 8s
@@ -379,9 +394,10 @@ function bloop(now){
       // (zona de duelo) en vez de trabarse en combate normal a rng=140;
       // si no, con ese alcance jamás llegarían a la distancia del duelo.
       // Una vez usado el único duelo de la batalla, vuelven a engancharse
-      // como cualquier otro enfrentamiento.
+      // como cualquier otro enfrentamiento. Ranged mantiene distancia:
+      // se detiene al 80% de su alcance en vez de caminar hasta el borde.
       const champVsChamp=tgt&&u.kind==="champ"&&tgt.kind==="champ"&&!B.duelDone;
-      const engageRng=champVsChamp?60:u.rng;
+      const engageRng=champVsChamp?60:(u.kind==="ranged"?u.rng*0.8:u.rng);
       if(tgt&&dist<=engageRng){
         if(u.t<=0){u.t=u.atk;
           const mult=counterMult(u,tgt);
@@ -433,7 +449,10 @@ function bloop(now){
         const spdMult=(B.S[String(u.side)].spdBuffT>0)?1.2:1; // Boudica: Carga Furiosa (6s)
         const ally=B.units.find(v=>v!==u&&v.side===u.side&&v.hp>0&&
           (v.x-u.x)*u.side>0&&(v.x-u.x)*u.side<20&&v.rng<=60);
-        if(!ally||u.rng>60&&(ally.x-u.x)*u.side>40)u.x+=u.spd*spdMult*u.side*dt;
+        // Separación (formaciones): no avanzar si ya hay un aliado del
+        // mismo tipo a menos de 16px, para que no se apilen en un punto.
+        const sameKindClose=B.units.find(v=>v!==u&&v.side===u.side&&v.kind===u.kind&&v.hp>0&&Math.abs(v.x-u.x)<16);
+        if((!ally||u.rng>60&&(ally.x-u.x)*u.side>40)&&!sameKindClose)u.x+=u.spd*spdMult*u.side*dt;
       }
     }
     if(B.duel&&B.duel.resolved)B.duel=null; // recién ahora: el bucle de arriba ya respetó la pausa este frame
@@ -495,7 +514,7 @@ function drawStick(u){
   const x=u.x+lunge*u.side;
   const bobY=Math.sin(u.bob)*1.5;
   const walk=Math.sin(u.bob*1.6)*4*s;             // balanceo de piernas
-  bx.save();bx.translate(x,g+bobY);bx.scale(u.side,1);
+  bx.save();bx.translate(x,g+bobY+(u.laneY||0));bx.scale(u.side,1); // carril de profundidad (formaciones)
   bx.strokeStyle=c;bx.fillStyle=c;bx.lineWidth=2.4*s;bx.lineCap="round";
   if(u.kind==="heavy"&&u.era>=3){ // tanque
     // orugas
