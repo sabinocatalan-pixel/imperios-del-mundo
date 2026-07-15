@@ -455,6 +455,7 @@ function bloop(now){
       const champVsChamp=tgt&&u.kind==="champ"&&tgt.kind==="champ"&&!B.duelDone;
       const engageRng=champVsChamp?60:(u.kind==="ranged"?u.rng*0.8:u.rng);
       if(tgt&&dist<=engageRng){
+        u.stuckT=0; // atacando: ya no está atorado
         if(u.t<=0){u.t=u.atk;
           const mult=counterMult(u,tgt);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
@@ -493,6 +494,7 @@ function bloop(now){
           }
         }
       }else if(!tgt&&baseD<=u.rng+18){
+        u.stuckT=0; // atacando la base: ya no está atorado
         if(u.t<=0){u.t=u.atk;
           const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
           const dmgToBase=u.dmg*dmgMultOut*baseMult;
@@ -509,7 +511,16 @@ function bloop(now){
         // mismo tipo a menos de 16px, para que no se apilen en un punto.
         const sameKindClose=B.units.find(v=>v!==u&&v.side===u.side&&v.kind===u.kind&&v.hp>0&&Math.abs(v.x-u.x)<16);
         const ignoraBloqueo=u.kind==="air"; // vuela sobre el tráfico terrestre
-        if((ignoraBloqueo||!ally||u.rng>60&&(ally.x-u.x)*u.side>40)&&!sameKindClose)u.x+=u.spd*spdMult*u.side*dt;
+        const bloqueado=!ignoraBloqueo&&((!!ally&&!(u.rng>60&&(ally.x-u.x)*u.side>40))||!!sameKindClose);
+        // Anti-atoro: sin objetivo válido y sin poder avanzar durante ~1s
+        // (aliado justo delante o apilado con uno del mismo tipo), se
+        // repone igual — ninguna unidad viva debe quedar inmóvil varios
+        // segundos (se nota sobre todo con ranged detrás de melee).
+        u.stuckT=bloqueado?(u.stuckT||0)+dt:0;
+        if(!bloqueado||u.stuckT>=1){
+          u.x+=u.spd*spdMult*u.side*dt;
+          if(bloqueado)u.stuckT=0;
+        }
       }
     }
     if(B.duel&&B.duel.resolved)B.duel=null; // recién ahora: el bucle de arriba ya respetó la pausa este frame

@@ -496,6 +496,44 @@ test("Banners narrativos: duración mínima 3-4s y se encolan sin superponerse",
   } finally { closeGame(g); }
 });
 
+/* 18 (corrección post-verificación de 2C). Un ranged bloqueado por un
+   aliado justo delante, sin objetivo válido en rango, debe reposicionarse
+   tras ~1s en vez de quedarse inmóvil para siempre. */
+test("Ranged atorado: se reposiciona tras ~1s si un aliado le bloquea el avance", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("EUN")'); // abre batalla vs CO
+    g.win.eval('B.S["-1"].gold=0;'); // que la IA no compre nada y complique la prueba con enemigos
+    g.win.eval('B.S["1"].gold=500;'); // suficiente para las dos unidades sin que el costo estorbe
+    g.win.eval('spawnUnit("1","melee")');
+    g.win.eval('spawnUnit("1","ranged")');
+    g.win.eval(`(function(){
+      const m=B.units.find(u=>u.kind==="melee"&&u.side===1);
+      const r=B.units.find(u=>u.kind==="ranged"&&u.side===1);
+      m.spd=0; m.x=90; r.x=80; // el melee no se mueve: bloqueo persistente a propósito
+    })()`);
+
+    g.win.eval('B.last=performance.now()-50;');
+    g.win.eval('bloop(performance.now())');
+    assert.strictEqual(g.win.eval(`B.units.find(u=>u.kind==="ranged"&&u.side===1).x`), 80,
+      "recién bloqueado, el ranged no debe avanzar de inmediato");
+    assert.ok(g.win.eval(`B.units.find(u=>u.kind==="ranged"&&u.side===1).stuckT`) > 0,
+      "debe empezar a contar el tiempo atorado");
+
+    // Se fuerza el contador por encima del umbral en vez de simular ~20
+    // frames reales: prueba directamente la condición de reposicionamiento.
+    g.win.eval(`(function(){B.units.find(u=>u.kind==="ranged"&&u.side===1).stuckT=1.01;})()`);
+    g.win.eval('B.last=performance.now()-50;');
+    g.win.eval('bloop(performance.now())');
+    const xTrasDesatoro=g.win.eval(`(function(){const r=B.units.find(u=>u.kind==="ranged"&&u.side===1);return r?r.x:null;})()`);
+    assert.ok(xTrasDesatoro!==null&&xTrasDesatoro>80,
+      "tras ~1s atorado debe reposicionarse (avanzar) aunque el aliado lo siga bloqueando");
+  } finally { closeGame(g); }
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
