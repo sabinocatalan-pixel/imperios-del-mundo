@@ -602,10 +602,11 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
     assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 0);
 
     g.win.eval('spawnUnit("1","melee"); B.S["1"].cool.melee=0; spawnUnit("1","melee")');
+    g.win.eval('B.S["1"].killsByType.melee=1'); // una baja lograda por ese regimiento
     g.win.eval('finishBattle(true)'); // side "1" (AG) gana
     await sleep(1700); // finishBattle resuelve tras 1500ms
-    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 6,
-      "participar suma +2 una sola vez al regimiento, aunque despliegue varias unidades, y victoria +4");
+    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 7,
+      "participar suma +2 una sola vez, victoria +4 y cada baja del regimiento +1");
 
     // Nv2 (30 XP): +8% de daño sobre una unidad recién creada.
     g.win.eval('F.AG.veterancy.melee.xp=30;');
@@ -636,6 +637,7 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
     // Derrota con más de la mitad de bajas de ese tipo: -20% de la barra.
     g.win.eval('F.AG.veterancy.melee.xp=50;');
     g.win.eval('F.AG.veterancy.ranged.xp=28; B.S["1"].gold=999; spawnUnit("1","ranged")');
+    g.win.eval('F.AG.veterancy.heavy.xp=30; B.S["1"].cool.heavy=0; spawnUnit("1","heavy"); B.units.find(u=>u.kind==="heavy"&&u.side===1).hp=0;');
     g.win.eval('B.units.find(u=>u.kind==="melee"&&u.side===1).hp=0;'); // simula la baja
     g.win.eval('finishBattle(false)'); // side "1" (AG) pierde
     await sleep(1700);
@@ -646,8 +648,12 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
       "derrota con >50% de bajas de ese tipo debe descontar 20% tras sumar la participación");
     assert.strictEqual(g.win.eval('F.AG.veterancy.ranged.xp'),30,
       "un regimiento que participa y sobrevive a la derrota conserva el +2 de participación");
+    assert.strictEqual(g.win.eval('F.AG.veterancy.heavy.xp'),26,
+      "la penalización debe poder cruzar el umbral y bajar el regimiento de Nv2 a Nv1");
     assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Veteranía Nv2"))'),
       "un cambio de nivel de veteranía debe generar una línea causal en el Resumen");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("descendió a Veteranía Nv1"))'),
+      "un descenso de nivel también debe explicar su causa en el Resumen");
 
     // La veteranía viaja en save v4 y un save anterior sin ella migra a cero.
     const guardado=g.win.eval('saveGame()');
