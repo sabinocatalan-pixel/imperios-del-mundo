@@ -543,6 +543,7 @@ function bloop(now){
       // de enemigos válidos, tanto para atacar como para bloquear su avance.
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&
         !((u.kind==="melee"||u.kind==="heavy")&&v.kind==="air"));
+      const siegeSuppressed=u.kind==="siege"&&foes.some(v=>v.kind==="melee"&&Math.abs(v.x-u.x)<u.minRng);
       let tgt=null,dist=Infinity;
       if(u.kind==="melee"){
         // Enfrentamiento en arco (formaciones): hasta 3 melee por objetivo;
@@ -563,11 +564,13 @@ function bloop(now){
         tgt=candidatos[0]||null;
         dist=tgt?Math.abs(tgt.x-u.x):Infinity;
       }else if(u.kind==="siege"){
-        const enemyBase=u.side===1?W-58:58,bd=(enemyBase-u.x)*u.side;
-        if(bd>u.rng+18){
-          const candidatos=foes.filter(v=>v.kind!=="air"&&(v.x-u.x)*u.side>=u.minRng)
-            .sort((a,b)=>(b.kind==="healer")-(a.kind==="healer")||Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
-          tgt=candidatos[0]||null;dist=tgt?Math.abs(tgt.x-u.x):Infinity;
+        if(!siegeSuppressed){
+          const enemyBase=u.side===1?W-58:58,bd=(enemyBase-u.x)*u.side;
+          if(bd>u.rng+18){
+            const candidatos=foes.filter(v=>v.kind!=="air"&&(v.x-u.x)*u.side>=u.minRng)
+              .sort((a,b)=>(b.kind==="healer")-(a.kind==="healer")||Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
+            tgt=candidatos[0]||null;dist=tgt?Math.abs(tgt.x-u.x):Infinity;
+          }
         }
       }else{
         const candidatos=foes.filter(v=>(v.x-u.x)*u.side>0).sort((a,b)=>
@@ -632,7 +635,7 @@ function bloop(now){
             }
           }
         }
-      }else if(!tgt&&baseD<=u.rng+18&&baseD>=(u.minRng||0)){
+      }else if(!tgt&&!siegeSuppressed&&baseD<=u.rng+18&&baseD>=(u.minRng||0)){
         u.attackedInWindow=true; // atacando la base: no cuenta para el anti-atoro
         if(u.t<=0){u.t=u.atk;
           const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
@@ -643,7 +646,7 @@ function bloop(now){
           SFX.hit();
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2,arc:u.kind==="siege"});}
       }else{
-        if(u.kind==="siege"&&baseD<u.minRng)continue; // demasiado cerca: el asedio queda anulado
+        if(u.kind==="siege"&&(siegeSuppressed||baseD<u.minRng))continue; // melee cercano: asedio totalmente anulado
         const spdMult=(B.S[String(u.side)].spdBuffT>0)?1.2:1; // Boudica: Carga Furiosa (6s)
         // El bloqueo por aliado-delante y la separación por apilado solo
         // cuentan entre unidades del MISMO carril (laneY cercano) — así el
