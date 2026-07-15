@@ -467,6 +467,35 @@ test("Unidades aéreas: matriz, inmunidad melee, límite de 2, resolución forza
   } finally { closeGame(g); }
 });
 
+/* 17 (ajuste de legibilidad, pilar 6). Los banners narrativos de batalla
+   (desgaste, duelo, habilidades de héroe...) deben durar como mínimo 3-4s
+   y encolarse en vez de superponerse si coinciden. */
+test("Banners narrativos: duración mínima 3-4s y se encolan sin superponerse", async () => {
+  const g = makeGame();
+  try {
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("EUN")'); // abre batalla (necesita B para pushBanner)
+
+    g.win.eval('pushBanner("prueba uno")');
+    assert.ok(g.win.eval('B.banner.duration') >= 3, "el banner debe durar al menos 3s");
+    assert.strictEqual(g.win.eval('B.banner.txt'), 'prueba uno');
+
+    // Un segundo banner mientras el primero sigue activo debe encolarse,
+    // no reemplazarlo ni mostrarse encima.
+    g.win.eval('pushBanner("prueba dos")');
+    assert.strictEqual(g.win.eval('B.banner.txt'), 'prueba uno');
+    assert.strictEqual(g.win.eval('B.bannerQueue.length'), 1);
+
+    // Al vencer el primero, el segundo debe tomar su lugar automáticamente.
+    g.win.eval('B.banner.elapsed = B.banner.duration + 0.1;');
+    g.win.eval('advanceBanner(0.016)');
+    assert.strictEqual(g.win.eval('B.banner.txt'), 'prueba dos');
+    assert.strictEqual(g.win.eval('B.bannerQueue.length'), 0);
+  } finally { closeGame(g); }
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
