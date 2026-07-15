@@ -601,11 +601,11 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
     g.win.eval('clickTerr("EUN")'); // abre batalla vs CO (CAN ataca)
     assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 0);
 
-    g.win.eval('spawnUnit("1","melee")'); // 1 melee desplegado en esta batalla
+    g.win.eval('spawnUnit("1","melee"); B.S["1"].cool.melee=0; spawnUnit("1","melee")');
     g.win.eval('finishBattle(true)'); // side "1" (AG) gana
     await sleep(1700); // finishBattle resuelve tras 1500ms
     assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 6,
-      "1 unidad desplegada (+2) + victoria (+4) = 6 XP");
+      "participar suma +2 una sola vez al regimiento, aunque despliegue varias unidades, y victoria +4");
 
     // Nv2 (30 XP): +8% de daño sobre una unidad recién creada.
     g.win.eval('F.AG.veterancy.melee.xp=30;');
@@ -617,8 +617,25 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
     const dmgNv2=g.win.eval('B.units.find(u=>u.kind==="melee"&&u.side===1).dmg');
     assert.ok(Math.abs(dmgNv2-dmgBase*1.08)<0.01, "Nv2 debe multiplicar el daño base por 1.08");
 
+    // Nv3: +15% daño y el rasgo menor exacto de cada tipo.
+    const nv3=g.win.eval(`(()=>{
+      const r={};
+      for(const k of ["melee","ranged","heavy","air"]){
+        const u=mkUnit(1,k,3,0),base={dmg:u.dmg,rng:u.rng,atk:u.atk,spd:u.spd};
+        applyVeterancy(u,k,3);r[k]={base,u};
+      }
+      return r;
+    })()`);
+    for(const k of ["melee","ranged","heavy","air"])
+      assert.ok(Math.abs(nv3[k].u.dmg/nv3[k].base.dmg-1.15)<1e-9, `Nv3 ${k} debe aplicar +15% daño`);
+    assert.strictEqual(nv3.melee.u.vetDefMult,0.95,"Nv3 melee debe recibir 5% menos daño");
+    assert.ok(Math.abs(nv3.ranged.u.rng/nv3.ranged.base.rng-1.1)<1e-9,"Nv3 ranged debe tener +10% alcance");
+    assert.ok(Math.abs(nv3.heavy.u.atk/nv3.heavy.base.atk-0.9)<1e-9,"Nv3 heavy debe tener -10% cd de ataque");
+    assert.ok(Math.abs(nv3.air.u.spd/nv3.air.base.spd-1.1)<1e-9,"Nv3 aéreo debe tener +10% velocidad");
+
     // Derrota con más de la mitad de bajas de ese tipo: -20% de la barra.
     g.win.eval('F.AG.veterancy.melee.xp=50;');
+    g.win.eval('F.AG.veterancy.ranged.xp=28; B.S["1"].gold=999; spawnUnit("1","ranged")');
     g.win.eval('B.units.find(u=>u.kind==="melee"&&u.side===1).hp=0;'); // simula la baja
     g.win.eval('finishBattle(false)'); // side "1" (AG) pierde
     await sleep(1700);
@@ -627,6 +644,23 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
     // tipo descuenta 20% de esa barra (52-10=42).
     assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'), 42,
       "derrota con >50% de bajas de ese tipo debe descontar 20% tras sumar la participación");
+    assert.strictEqual(g.win.eval('F.AG.veterancy.ranged.xp'),30,
+      "un regimiento que participa y sobrevive a la derrota conserva el +2 de participación");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Veteranía Nv2"))'),
+      "un cambio de nivel de veteranía debe generar una línea causal en el Resumen");
+
+    // La veteranía viaja en save v4 y un save anterior sin ella migra a cero.
+    const guardado=g.win.eval('saveGame()');
+    g.win.eval('F.AG.veterancy.melee.xp=0');
+    assert.strictEqual(g.win.eval(`loadGame(${JSON.stringify(guardado)})`),true);
+    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'),42,"save v4 debe restaurar la XP de veteranía");
+    const antiguo=g.win.eval(`(()=>{
+      const d=JSON.parse(decodeURIComponent(escape(atob(saveGame()))));
+      d.v=3;for(const f of Object.values(d.Fx))delete f.veterancy;
+      return btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+    })()`);
+    assert.strictEqual(g.win.eval(`loadGame(${JSON.stringify(antiguo)})`),true);
+    assert.strictEqual(g.win.eval('F.AG.veterancy.melee.xp'),0,"un save anterior debe migrar veteranía a cero");
   } finally { closeGame(g); }
 });
 
