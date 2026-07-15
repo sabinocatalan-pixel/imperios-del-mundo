@@ -717,7 +717,7 @@ function drawStick(u){
   bx.fillStyle="#7ED66E";bx.fillRect(x-12,g-flyOff-46*u.size,24*Math.max(0,u.hp/u.max),3);
   // Rasgos visuales de veteranía (Fase 2D) — SOLO cosméticos, la ventaja
   // real ya está aplicada en applyVeterancy(); esto solo comunica estatus.
-  if(u.vetLvl>=2){
+  if(u.vetLvl>=2&&diffMult>=1){
     const dorado=u.vetLvl>=3,fy=g-flyOff-54*u.size;
     bx.strokeStyle=dorado?"#FFD866":"#D8CBA8";bx.lineWidth=dorado?1.8:1.3;
     bx.beginPath();bx.moveTo(x,fy);bx.lineTo(x,fy-(dorado?14:10)*u.size);bx.stroke();

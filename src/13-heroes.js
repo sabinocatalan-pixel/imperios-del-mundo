@@ -124,6 +124,12 @@ function isHeroUnlocked(id) {
   if (!h) return false;
   return !h.locked || !!(LEGACY.heroes && LEGACY.heroes[id]);
 }
+function difficultyHeroLockText(hero){
+  if(diffMult<1&&hero.rarity==="mitico")return"No disponible en Fácil";
+  if(diffMult===1&&(hero.rarity==="legendario"||hero.rarity==="mitico"))return"Disponible en Difícil o Pesadilla";
+  if(diffMult<1.5&&hero.rarity==="mitico")return"Disponible en Pesadilla";
+  return hero.condDesc||"";
+}
 
 /* ==================== EQUIPAMIENTO ====================
    f.heroes = [activoId|null, consejo1Id|null, consejo2Id|null] */
@@ -228,7 +234,7 @@ function renderPanteon() {
       onclick="${unlocked ? `panteonCardClick('${id}')` : ""}">
       <div class="heroName">${unlocked ? hero.name : (hero.rarity === "mitico" ? "???" : hero.name)}</div>
       <div class="heroMeta">${hero.region} · ${RAREZA_LABEL[hero.rarity]}</div>
-      ${unlocked ? "" : `<div class="heroLock">🔒 ${hero.condDesc || ""}</div>`}
+      ${unlocked ? "" : `<div class="heroLock">🔒 ${difficultyHeroLockText(hero)}</div>`}
       ${slot === 0 ? `<div class="heroSlotTag">⭐ activo</div>` : slot > 0 ? `<div class="heroSlotTag">consejo</div>` : ""}
     </div>`;
   }

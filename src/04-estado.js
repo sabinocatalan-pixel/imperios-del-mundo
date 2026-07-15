@@ -34,6 +34,7 @@ function reset(){
   missions=MISSION_DEFS.map(m=>({...m,done:false}));
   closeModals();
   document.getElementById("battle").style.display="none";
+  if(document.getElementById("worldBanner"))document.getElementById("worldBanner").style.display="none";
   document.getElementById("log").innerHTML="";
   renderLegacy();renderScenList();
   document.getElementById("startModal").style.display="flex";

@@ -46,11 +46,11 @@ function incomePhase(){
     }else if(f&&f.food>0){t.pop=Math.min(80,t.pop+1);f.food--;}
   }
   const plagueBase=0.07*(scenario&&scenario.plagueX?scenario.plagueX:1);
-  if(Math.random()<liveEventProbability(plagueBase,"plaga")){
-    const ids=Object.keys(T),v=ids[Math.floor(Math.random()*ids.length)];
+  {const ids=Object.keys(T),v=ids[Math.floor(Math.random()*ids.length)];
+  if(Math.random()<liveEventProbability(plagueBase,"plaga",T[v].owner)){
     if(T[v].plague===0){T[v].plague=2;recordLiveEvent("plaga",T[v].owner,true);
       logCausal(`☣ Brote de peste en ${TERR[v].n}: la tensión y la escasez elevaron el riesgo.`,"loss");}
-  }
+  }}
   const pf=F[player];
   if(pf&&pf.faith>=100&&Math.random()<0.15){
     const en=Object.keys(T).filter(id=>T[id].owner!==player);
@@ -102,7 +102,10 @@ function checkEnd(){
 function endGame(title,text,won=true,winner=null){
   phase="over";
   if(won&&!scenario&&humans.length===1)LEGACY.wins++;
-  if(won&&!scenario&&humans.length===1&&diffMult===1.3)LEGACY.hardWins=(LEGACY.hardWins|0)+1;
+  if(won&&!scenario&&humans.length===1&&diffMult===1.3){
+    const primero=!LEGACY.hardWins;LEGACY.hardWins=(LEGACY.hardWins|0)+1;
+    if(primero)logCausal("⭐ Desbloqueaste Pesadilla: venciste una partida en Difícil.","win");
+  }
   if(won&&player)checkHeroLegacyUnlocks(player,won);
   autoSaveLegacy();
   $("ovTitle").textContent=title;$("ovText").textContent=text;
