@@ -762,6 +762,113 @@ test("Pesadilla y aleatoriedad viva: desbloqueo, doble ataque, clamp y anti-repe
   }finally{closeGame(g);}
 });
 
+/* 23 (Fase 3A). El sanador cura, no ataca, no apila curación, limita dos
+   unidades y reduce la cura de héroes durante Desgaste. */
+test("Sanador: cura visible sin atacar, no apila y respeta límite y penalizaciones", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");clickTerr("CAN");clickTerr("EUN");B.pvp=true;B.S["1"].gold=999;');
+    g.win.eval('spawnUnit("1","healer");B.S["1"].cool.healer=0;spawnUnit("1","healer");B.S["1"].cool.healer=0;spawnUnit("1","healer");');
+    assert.strictEqual(g.win.eval('B.units.filter(u=>u.side===1&&u.kind==="healer").length'),2,"máximo dos sanadores por bando");
+    g.win.eval(`(()=>{const a=mkUnit(1,"melee",0,0);a.x=90;a.hp=a.max*0.5;B.units.push(a);
+      const e=mkUnit(-1,"melee",0,0);e.x=40;e.hp=e.max;B.units.push(e);
+      B.units.filter(u=>u.kind==="healer").forEach(h=>{h.x=70;h.t=0;});B.testAlly=a;B.testEnemy=e;})()`);
+    const hpAntes=g.win.eval('B.testAlly.hp'),enemigoAntes=g.win.eval('B.testEnemy.hp');
+    g.win.eval('bloop(B.last+50)');
+    const cura=g.win.eval('B.testAlly.hp')-hpAntes;
+    assert.ok(Math.abs(cura-g.win.eval('B.testAlly.max*0.04*0.5'))<0.01,"dos sanadores no deben apilar: solo un pulso de 4%/s");
+    assert.strictEqual(g.win.eval('B.testEnemy.hp'),enemigoAntes,"el sanador nunca debe atacar");
+    assert.ok(g.win.eval('B.dmgs.some(d=>String(d.txt).startsWith("+")&&d.c==="#7ED66E")'),"la cura debe mostrar número verde");
+    assert.ok(g.win.eval('B.projs.some(p=>p.c==="#7ED66E")'),"la cura debe mostrar línea/destello verde");
+
+    g.win.eval(`(()=>{const c=mkUnit(1,"champ",0,0,1);c.x=75;c.hp=c.max*0.5;B.units.push(c);B.testChamp=c;
+      B.pacing.desgaste=true;B.units.filter(u=>u.kind==="healer").forEach(h=>h.t=0);})()`);
+    const champAntes=g.win.eval('B.testChamp.hp');
+    g.win.eval('bloop(B.last+50)');
+    const curaChamp=g.win.eval('B.testChamp.hp')-champAntes;
+    assert.ok(Math.abs(curaChamp-g.win.eval('B.testChamp.max*0.04*0.5*0.5*0.5'))<0.01,
+      "héroe recibe 50% y Desgaste reduce otra mitad");
+    assert.ok(g.win.eval('B.units.filter(u=>u.kind==="healer").every(h=>h.hp===h.max)'),"los sanadores no se curan entre ellos");
+
+    g.win.eval(`(()=>{const h=B.units.find(u=>u.kind==="healer");h.x=100;h.hp=h.max;
+      const m=mkUnit(1,"melee",0,0);m.x=170;const r=mkUnit(-1,"ranged",0,0);r.x=248;r.t=0;
+      B.units=[h,m,r];B.priorityHealer=h;B.priorityMelee=m;})()`);
+    const healerAntes=g.win.eval('B.priorityHealer.hp'),meleeAntes=g.win.eval('B.priorityMelee.hp');
+    g.win.eval('bloop(B.last+50)');
+    assert.ok(g.win.eval('B.priorityHealer.hp')<healerAntes,"la IA enemiga debe priorizar al sanador detectado");
+    assert.strictEqual(g.win.eval('B.priorityMelee.hp'),meleeAntes,"prioriza sanador aunque haya melee más cercano");
+  }finally{closeGame(g);}
+});
+
+/* 24 (Fase 3A). Asedio: arco por encima de aliados, mínimo 80px,
+   salpicadura terrestre, prioridad de base e inmunidad de objetivos aéreos. */
+test("Asedio: arco, rango mínimo, prioridad de base y vulnerabilidad coherente", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");clickTerr("CAN");clickTerr("EUN");B.pvp=true;B.S["1"].gold=999;
+      spawnUnit("1","siege");B.S["1"].cool.siege=0;spawnUnit("1","siege");B.S["1"].cool.siege=0;spawnUnit("1","siege");`);
+    assert.strictEqual(g.win.eval('B.units.filter(u=>u.side===1&&u.kind==="siege").length'),2,"máximo dos asedios por bando");
+    g.win.eval('B.units=B.units.filter((u,i)=>u.kind!=="siege"||i===B.units.findIndex(v=>v.kind==="siege"));');
+    g.win.eval(`(()=>{const s=B.units.find(u=>u.kind==="siege");s.x=70;s.t=0;
+      const aliado=mkUnit(1,"melee",0,0);aliado.x=105;aliado.laneY=s.laneY;B.units.push(aliado);
+      const e1=mkUnit(-1,"melee",0,0);e1.x=220;const e2=mkUnit(-1,"ranged",0,0);e2.x=240;
+      const air=mkUnit(-1,"air",2,0);air.x=200;B.units.push(e1,e2,air);B.siege=s;B.e1=e1;B.e2=e2;B.air3a=air;})()`);
+    const e1Antes=g.win.eval('B.e1.hp'),e2Antes=g.win.eval('B.e2.hp'),airAntes=g.win.eval('B.air3a.hp');
+    g.win.eval('bloop(B.last+50)');
+    assert.ok(g.win.eval('B.e1.hp')<e1Antes,"asedio debe golpear al objetivo terrestre");
+    assert.ok(g.win.eval('B.e2.hp')<e2Antes,"asedio debe aplicar salpicadura pequeña");
+    assert.strictEqual(g.win.eval('B.air3a.hp'),airAntes,"asedio no alcanza aéreos");
+    assert.ok(g.win.eval('B.projs.some(p=>p.arc)'),"el proyectil debe marcarse y dibujarse en arco");
+    assert.ok(g.win.eval('B.siege.attackedInWindow'),"dispara por encima del aliado sin quedar atorado por la formación");
+    assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"siege"})'),1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"air"},{kind:"siege"})'),1.5);
+
+    g.win.eval(`B.units=[B.siege];B.siege.x=200;B.siege.t=0;
+      B.closeMelee=mkUnit(-1,"melee",0,0);B.closeMelee.x=250;B.units.push(B.closeMelee);`);
+    const cercaAntes=g.win.eval('B.closeMelee.hp');
+    g.win.eval('bloop(B.last+50)');
+    assert.strictEqual(g.win.eval('B.closeMelee.hp'),cercaAntes,"asedio no dispara dentro de su rango mínimo de 80px");
+
+    g.win.eval(`B.units=[B.siege];B.siege.x=650;B.siege.t=0;B.eHP=B.eMax;
+      B.baseDecoy=mkUnit(-1,"melee",0,0);B.baseDecoy.x=760;B.units.push(B.baseDecoy);`);
+    const baseAntes=g.win.eval('B.eHP'),decoyAntes=g.win.eval('B.baseDecoy.hp');
+    g.win.eval('bloop(B.last+50)');
+    assert.ok(g.win.eval('B.eHP')<baseAntes,"asedio debe priorizar base/torreta al entrar en alcance");
+    assert.strictEqual(g.win.eval('B.baseDecoy.hp'),decoyAntes,"la prioridad de base debe superar al objetivo terrestre");
+  }finally{closeGame(g);}
+});
+
+/* 25 (Fase 3A). La IA despliega los dos apoyos con spawnUnit y el save v5
+   conserva/migra su veteranía. */
+test("IA usa sanador y asedio; save v5 migra veteranía de apoyo", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");clickTerr("CAN");clickTerr("EUN");Math.random=()=>0;B.S["-1"].gold=999;B.eCool=0;');
+    g.win.eval('B.woundedAI=mkUnit(-1,"melee",0,0);B.woundedAI.hp*=0.5;B.units.push(B.woundedAI);enemyAI(0.1);');
+    assert.ok(g.win.eval('B.units.some(u=>u.side===-1&&u.kind==="healer")'),"la IA debe desplegar sanador ante aliados heridos");
+    g.win.eval('B.units.forEach(u=>{if(u.side===-1)u.hp=u.max;});B.eCool=0;enemyAI(0.1);');
+    assert.ok(g.win.eval('B.units.some(u=>u.side===-1&&u.kind==="siege")'),"la IA debe desplegar asedio con las mismas reglas");
+
+    g.win.eval('F.AG.veterancy.healer.xp=30;F.AG.veterancy.siege.xp=80;');
+    const code=g.win.eval('saveGame()');
+    assert.strictEqual(g.win.eval(`JSON.parse(decodeURIComponent(escape(atob(${JSON.stringify(code)})))).v`),5);
+    g.win.eval('F.AG.veterancy.healer.xp=0;loadGame('+JSON.stringify(code)+')');
+    assert.strictEqual(g.win.eval('F.AG.veterancy.healer.xp'),30);
+    assert.strictEqual(g.win.eval('F.AG.veterancy.siege.xp'),80);
+    const veteranos=g.win.eval(`(()=>{const h=mkUnit(1,"healer",0,0),s=mkUnit(1,"siege",0,0),base={hr:h.rng,sd:s.dmg,sa:s.atk};
+      applyVeterancy(h,"healer",2);applyVeterancy(s,"siege",3);return{h,s,base};})()`);
+    assert.ok(Math.abs(veteranos.h.healMult-1.08)<1e-9,"Nv2 sanador aplica +8% curación");
+    assert.ok(Math.abs(veteranos.s.dmg/veteranos.base.sd-1.15)<1e-9,"Nv3 asedio aplica +15% daño");
+    assert.ok(Math.abs(veteranos.s.atk/veteranos.base.sa-0.9)<1e-9,"Nv3 asedio aplica -10% cd de ataque");
+    const v4=g.win.eval(`(()=>{const d=JSON.parse(decodeURIComponent(escape(atob(saveGame()))));d.v=4;
+      for(const f of Object.values(d.Fx)){delete f.veterancy.healer;delete f.veterancy.siege;}
+      return btoa(unescape(encodeURIComponent(JSON.stringify(d))));})()`);
+    assert.strictEqual(g.win.eval(`loadGame(${JSON.stringify(v4)})`),true);
+    assert.strictEqual(g.win.eval('F.AG.veterancy.healer.xp'),0,"v4 migra sanador a 0 XP");
+    assert.strictEqual(g.win.eval('F.AG.veterancy.siege.xp'),0,"v4 migra asedio a 0 XP");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
