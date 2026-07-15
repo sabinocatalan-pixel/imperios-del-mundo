@@ -418,6 +418,22 @@ function bloop(now){
       u.stunT=Math.max(0,(u.stunT||0)-dt);
       if(u.stunT>0)continue; // aturdido (onda de Amaru): no ataca ni avanza
       if(B.duel&&(u===B.duel.h1||u===B.duel.h2||Math.abs(u.x-B.duel.mid)<140))continue; // duelo: pausa en 140px (también en el frame que se resuelve)
+      // Anti-atoro UNIVERSAL (cualquier tipo de unidad, no solo ranged): si en
+      // los últimos ~1.2s no atacó y prácticamente no avanzó, se fuerza un
+      // micro-reposicionamiento — empuje hacia adelante + nuevo carril lateral
+      // al azar — sin importar la causa exacta del bloqueo (aliado delante,
+      // apilado con otro del mismo tipo, o cualquier otra situación no
+      // prevista). Objetivo: ninguna unidad viva queda congelada varios
+      // segundos mientras la línea de combate sigue adelante.
+      u.idleCheckT=(u.idleCheckT||0)+dt;
+      if(u.idleCheckT>=1.2){
+        const avance=Math.abs(u.x-(u.lastCheckX??u.x));
+        if(avance<3&&!u.attackedInWindow){
+          u.x+=u.spd*u.side*0.3;
+          u.laneY=[-12,0,12][Math.floor(Math.random()*3)]+(Math.random()*8-4); // recarrila para dejar de bloquear/ser bloqueado
+        }
+        u.lastCheckX=u.x;u.idleCheckT=0;u.attackedInWindow=false;
+      }
       // Melee y heavy no alcanzan aéreos (inmunidad): se filtran de su lista
       // de enemigos válidos, tanto para atacar como para bloquear su avance.
       const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&
@@ -455,7 +471,7 @@ function bloop(now){
       const champVsChamp=tgt&&u.kind==="champ"&&tgt.kind==="champ"&&!B.duelDone;
       const engageRng=champVsChamp?60:(u.kind==="ranged"?u.rng*0.8:u.rng);
       if(tgt&&dist<=engageRng){
-        u.stuckT=0; // atacando: ya no está atorado
+        u.attackedInWindow=true; // atacando: no cuenta para el anti-atoro
         if(u.t<=0){u.t=u.atk;
           const mult=counterMult(u,tgt);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
@@ -494,7 +510,7 @@ function bloop(now){
           }
         }
       }else if(!tgt&&baseD<=u.rng+18){
-        u.stuckT=0; // atacando la base: ya no está atorado
+        u.attackedInWindow=true; // atacando la base: no cuenta para el anti-atoro
         if(u.t<=0){u.t=u.atk;
           const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
           const dmgToBase=u.dmg*dmgMultOut*baseMult;
@@ -505,22 +521,17 @@ function bloop(now){
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2});}
       }else{
         const spdMult=(B.S[String(u.side)].spdBuffT>0)?1.2:1; // Boudica: Carga Furiosa (6s)
+        // El bloqueo por aliado-delante y la separación por apilado solo
+        // cuentan entre unidades del MISMO carril (laneY cercano) — así el
+        // recarrilado del anti-atoro (arriba) realmente saca a la unidad del
+        // bloqueo en vez de quedar atrapada en el mismo grupo para siempre.
         const ally=B.units.find(v=>v!==u&&v.side===u.side&&v.hp>0&&
-          (v.x-u.x)*u.side>0&&(v.x-u.x)*u.side<20&&v.rng<=60);
-        // Separación (formaciones): no avanzar si ya hay un aliado del
-        // mismo tipo a menos de 16px, para que no se apilen en un punto.
-        const sameKindClose=B.units.find(v=>v!==u&&v.side===u.side&&v.kind===u.kind&&v.hp>0&&Math.abs(v.x-u.x)<16);
+          (v.x-u.x)*u.side>0&&(v.x-u.x)*u.side<20&&v.rng<=60&&
+          Math.abs((v.laneY||0)-(u.laneY||0))<10);
+        const sameKindClose=B.units.find(v=>v!==u&&v.side===u.side&&v.kind===u.kind&&v.hp>0&&
+          Math.abs(v.x-u.x)<16&&Math.abs((v.laneY||0)-(u.laneY||0))<10);
         const ignoraBloqueo=u.kind==="air"; // vuela sobre el tráfico terrestre
-        const bloqueado=!ignoraBloqueo&&((!!ally&&!(u.rng>60&&(ally.x-u.x)*u.side>40))||!!sameKindClose);
-        // Anti-atoro: sin objetivo válido y sin poder avanzar durante ~1s
-        // (aliado justo delante o apilado con uno del mismo tipo), se
-        // repone igual — ninguna unidad viva debe quedar inmóvil varios
-        // segundos (se nota sobre todo con ranged detrás de melee).
-        u.stuckT=bloqueado?(u.stuckT||0)+dt:0;
-        if(!bloqueado||u.stuckT>=1){
-          u.x+=u.spd*spdMult*u.side*dt;
-          if(bloqueado)u.stuckT=0;
-        }
+        if((ignoraBloqueo||!ally||u.rng>60&&(ally.x-u.x)*u.side>40)&&!sameKindClose)u.x+=u.spd*spdMult*u.side*dt;
       }
     }
     if(B.duel&&B.duel.resolved)B.duel=null; // recién ahora: el bucle de arriba ya respetó la pausa este frame
