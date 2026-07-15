@@ -414,6 +414,59 @@ test("Duelo de Campeones: se dispara en PvP con movimiento normal (sin héroes t
   } finally { closeGame(g); }
 });
 
+/* 16 (Fase 2C). Unidades aéreas: matriz ampliada, inmunidad melee, límite
+   de 2 por bando, y resolución forzada a 210s. (El plan la llama "Prueba
+   15" de 2C, pero ya usé el 15 para la regresión de duelo en PvP que pidió
+   Gabriel tras la verificación manual — sigo la numeración secuencial real
+   de la suite en vez de reescribir los comentarios de pruebas anteriores.) */
+test("Unidades aéreas: matriz, inmunidad melee, límite de 2, resolución forzada", async () => {
+  const g = makeGame();
+  try {
+    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"air"})'), 1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"air"},{kind:"heavy"})'), 1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"air"})'), 1, "sin matchup definido: multiplicador normal");
+
+    g.win.eval('startGame(1.0)');
+    g.win.eval('clickTerr("CAN")'); // player = AG
+    g.win.eval('F.AG.era=2;F.CO.era=2;'); // Época Industrial: ya hay unidades aéreas
+    g.win.eval('clickTerr("CAN")');
+    g.win.eval('clickTerr("EUN")'); // abre batalla vs CO (B.S["-1"]=CO)
+    g.win.eval('B.S["-1"].gold=500;'); // oro de sobra para no confundir el límite con falta de oro
+
+    // Melee no golpea aéreo: un melee propio pegado a un aéreo enemigo no
+    // debe poder dañarlo aunque corran varios frames de combate normal.
+    g.win.eval('spawnUnit("1","melee")');
+    g.win.eval('spawnUnit("-1","air")');
+    g.win.eval(`(function(){
+      const m=B.units.find(u=>u.kind==="melee"&&u.side===1);
+      const a=B.units.find(u=>u.kind==="air"&&u.side===-1);
+      m.x=W/2-5; a.x=W/2+5;
+    })()`);
+    for (let i = 0; i < 20; i++) {
+      g.win.eval('B.last=performance.now()-50;');
+      g.win.eval('bloop(performance.now())');
+    }
+    const airHpFrac = g.win.eval(`(function(){const a=B.units.find(u=>u.kind==="air"&&u.side===-1);return a?a.hp/a.max:null;})()`);
+    assert.strictEqual(airHpFrac, 1, "el melee no debe poder dañar a un aéreo");
+
+    // Límite de 2 aéreos por bando: ya hay 1 (arriba); el 2º debe entrar,
+    // el 3er intento debe rechazarse.
+    g.win.eval('B.S["-1"].cool.air=0;');
+    g.win.eval('spawnUnit("-1","air")'); // 2º
+    g.win.eval('B.S["-1"].cool.air=0;');
+    g.win.eval('spawnUnit("-1","air")'); // intento de 3º
+    const airCount = g.win.eval('B.units.filter(u=>u.side===-1&&u.kind==="air").length');
+    assert.strictEqual(airCount, 2, "no debe haber más de 2 aéreos por bando en campo");
+
+    // Resolución forzada a 210s.
+    assert.strictEqual(g.win.eval('B.over'), false);
+    g.win.eval('B.time=210;');
+    g.win.eval('bloop(performance.now())');
+    assert.strictEqual(g.win.eval('B.pacing.resuelto'), true);
+    assert.strictEqual(g.win.eval('B.over'), true);
+  } finally { closeGame(g); }
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
