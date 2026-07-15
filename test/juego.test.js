@@ -670,6 +670,71 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
   } finally { closeGame(g); }
 });
 
+/* 21 (Fase 2E). La coalición usa la fórmula de amenaza, crea alianzas
+   visibles entre miembros y expira al completar sus cinco rondas. */
+test("Coalición anti-líder: activa según fórmula y expira a cinco rondas", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1.3); clickTerr("CAN"); round=8; Math.random=()=>0;');
+    g.win.eval('F.AG.gold=10000; F.AG.science=1000; ownedBy("AG").forEach(id=>{T[id].troops=99;T[id].base=3;});');
+    assert.strictEqual(g.win.eval('coalitionChance(0.25)'),0);
+    assert.strictEqual(g.win.eval('coalitionChance(2)'),0.75,"la probabilidad debe respetar el techo de 75%");
+    g.win.eval('for(const f of alive())if(f!=="AG")relAdd(f,"AG",-100); updateCoalition();');
+    assert.ok(g.win.eval('coalition!==null'),"una amenaza extrema debe poder activar la coalición");
+    assert.strictEqual(g.win.eval('coalition.leader'),"AG");
+    assert.ok(g.win.eval('coalition.members.length>=2'));
+    assert.strictEqual(g.doc.getElementById("worldBanner").style.display,"flex","la activación debe mostrar banner narrativo");
+    assert.ok(g.win.eval('pacts.some(p=>p.coalition)'),"los miembros deben pactar automáticamente entre sí");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("COALICIÓN"))'),"la coalición debe sumarse al Resumen");
+    g.win.eval('coalition.rounds=1; updateCoalition();');
+    assert.strictEqual(g.win.eval('coalition'),null,"la coalición debe expirar al completar cinco rondas");
+    assert.ok(!g.win.eval('pacts.some(p=>p.coalition)'),"los pactos automáticos deben terminar con la coalición");
+  }finally{closeGame(g);}
+});
+
+/* 22 (Fase 2E). Pesadilla requiere una victoria en Difícil, da ingreso
+   x1.5 a la IA, permite dos ataques y ProbEvento aplica clamp/antirachas. */
+test("Pesadilla y aleatoriedad viva: desbloqueo, doble ataque, clamp y anti-repetición", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('alert=()=>{}');
+    assert.strictEqual(g.win.eval('startGame(1.5)'),false,"Pesadilla debe empezar bloqueada");
+    g.win.eval('LEGACY.hardWins=1; startGame(1.5); clickTerr("USA"); Math.random=()=>0;');
+    assert.strictEqual(g.win.eval('diffMult'),1.5);
+
+    // Mapa controlado: CO dispone de dos objetivos IA débiles y conserva
+    // al humano AG vivo, evitando batallas de defensa durante esta prueba.
+    g.win.eval(`for(const id in T){T[id].owner="CO";T[id].troops=20;T[id].base=0;}
+      T.USA.owner="AG";T.USA.troops=99;
+      T.EUN.owner="SB";T.EUN.troops=1;T.RUS.owner="SB";T.RUS.troops=1;
+      T.CAN.owner="CO";T.CAN.troops=99;
+      for(const f in F){F[f].gold=0;F[f].science=0;F[f].food=20;}
+      phase="play";`);
+    const ingresoBase=g.win.eval(`(()=>{let g=0;for(const id of ownedBy("CO")){
+      const t=T[id],d=TERR[id];g+=4+Math.floor(t.pop*0.3)+t.base*2;
+      if(d.res==="oro")g+=3;}for(const cn in CONTINENTS){const c=CONTINENTS[cn];
+      if(c.ids.every(id=>T[id].owner==="CO"))g+=c.bonus;}return g;})()`);
+    g.win.eval('incomePhase()');
+    assert.strictEqual(g.win.eval('F.CO.gold'),Math.floor(ingresoBase*1.5),
+      "la IA de Pesadilla debe recibir exactamente x1.5 de ingreso de oro");
+    g.win.eval('aiTurns(true)');
+    const doble=await waitUntil(g.win,'F.CO.attacksThisRound===2',{timeout:8000});
+    assert.ok(doble,"una IA en Pesadilla debe poder ejecutar dos ataques en la ronda");
+
+    g.win.eval('round=12; eventHistory=[]; warHistory=[];');
+    const fresh=g.win.eval('liveEventProbability(0.12,"prueba","SB")');
+    assert.ok(fresh>=0.05&&fresh<=0.35,"ProbEvento debe respetar clamp 5%-35%");
+    g.win.eval('recordLiveEvent("prueba","CO",false)');
+    const repeated=g.win.eval('liveEventProbability(0.12,"prueba","SB")');
+    assert.ok(repeated<=fresh,"repetir el mismo evento en <=2 rondas debe reducir su probabilidad");
+    g.win.eval('eventHistory=[]; recordLiveEvent("malo1","SB",true); recordLiveEvent("malo2","SB",true);');
+    const punished=g.win.eval('liveEventProbability(0.30,"nuevo","SB")');
+    g.win.eval('eventHistory=[];');
+    const unpunished=g.win.eval('liveEventProbability(0.30,"nuevo","SB")');
+    assert.ok(punished<unpunished,"dos eventos negativos recientes deben activar AntiCastigo x0.5");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
