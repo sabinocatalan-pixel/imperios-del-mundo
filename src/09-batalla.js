@@ -157,6 +157,7 @@ function advanceBanner(dt){
 }
 
 function openBattle(from,to,mode){
+  recordWar();
   inBattle=true;selected=null;
   const defT=T[to],atkT=T[from];
   const pFacId=mode==="attack"?atkT.owner:defT.owner;   // humano que controla el lado izquierdo

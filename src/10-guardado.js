@@ -31,7 +31,7 @@ function saveGame(){
   if(!player){return "";}
   const data={v:4,T,Fx:F,player,round,diffMult,rel,humans,
     pacts:pacts.map(p=>({a:p.a,b:p.b,type:p.type,rounds:p.rounds,coalition:!!p.coalition})),
-    mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,coalition};
+    mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,coalition,eventHistory,warHistory};
   return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
 }
 function loadGame(code){
@@ -42,6 +42,7 @@ function loadGame(code){
     for(const fid in F)migrateFactionToV4(F[fid]);
     humans=d.humans||[d.player];turnIdx=0;pendingOffer=null;player=humans[0];
     rel=d.rel;pacts=d.pacts;coalition=d.coalition||null;
+    eventHistory=d.eventHistory||[];warHistory=d.warHistory||[];
     missions=MISSION_DEFS.map((m,i)=>({...m,done:!!d.mis[i]}));
     if(d.leg){LEGACY.wins=d.leg.wins|0;LEGACY.hardWins=d.leg.hardWins|0;LEGACY.scen=d.leg.scen||{};LEGACY.heroes=d.leg.heroes||{};}
     scenario=d.scn?SCENARIOS.find(x=>x.id===d.scn)||null:null;

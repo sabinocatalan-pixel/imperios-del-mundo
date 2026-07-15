@@ -1,6 +1,24 @@
 /* ==================== 07-economia.js ====================
    Economía/eventos (incomePhase, plagas) y combate auto IA vs IA. */
 /* ==================== ECONOMÍA / EVENTOS ==================== */
+function clampEvent(x){return Math.max(0.05,Math.min(0.35,x));}
+function recordWar(){warHistory.push(round);warHistory=warHistory.filter(r=>round-r<=3);}
+function recordLiveEvent(type,target,negative=false){
+  eventHistory.push({type,target,negative,round});
+  eventHistory=eventHistory.filter(e=>round-e.round<=3);
+}
+function liveEventProbability(base,type,target=null){
+  const vivos=alive(),n=Math.max(1,vivos.length);
+  const tension=Math.min(1,warHistory.filter(r=>round-r<=3).length/n);
+  const scarcity=vivos.filter(fid=>F[fid].food<5).length/n;
+  const lead=leaderThreat(),leaderAdvantage=Math.max(0,Math.min(1,lead.threat));
+  const repetition=eventHistory.some(e=>e.type===type&&round-e.round<=2)?1:0;
+  const saturation=Math.min(1,eventHistory.filter(e=>round-e.round<=3).length/3);
+  let p=base+tension*0.12+scarcity*0.10+leaderAdvantage*0.08-repetition*0.15-saturation*0.10;
+  if(target&&eventHistory.filter(e=>e.target===target&&e.negative&&round-e.round<=3).length>=2)p*=0.5;
+  if(target&&target===lead.leader)p*=1.2;
+  return clampEvent(p);
+}
 function incomePhase(){
   for(const fid of alive()){
     const f=F[fid];let g=0,fo=0,sc=0,fa=0,cu=0;
@@ -27,10 +45,11 @@ function incomePhase(){
       if(t.plague===0)log(`La plaga terminó en ${TERR[id].n}.`);
     }else if(f&&f.food>0){t.pop=Math.min(80,t.pop+1);f.food--;}
   }
-  const plagueChance=0.07*(scenario&&scenario.plagueX?scenario.plagueX:1);
-  if(Math.random()<plagueChance){
+  const plagueBase=0.07*(scenario&&scenario.plagueX?scenario.plagueX:1);
+  if(Math.random()<liveEventProbability(plagueBase,"plaga")){
     const ids=Object.keys(T),v=ids[Math.floor(Math.random()*ids.length)];
-    if(T[v].plague===0){T[v].plague=2;logCausal(`☣ Brote de peste en ${TERR[v].n}.`,"loss");}
+    if(T[v].plague===0){T[v].plague=2;recordLiveEvent("plaga",T[v].owner,true);
+      logCausal(`☣ Brote de peste en ${TERR[v].n}: la tensión y la escasez elevaron el riesgo.`,"loss");}
   }
   const pf=F[player];
   if(pf&&pf.faith>=100&&Math.random()<0.15){
@@ -53,6 +72,7 @@ function checkContinentMission(){
 
 /* ==================== AUTO-COMBATE (IA vs IA) ==================== */
 function autoBattle(from,to){
+  recordWar();
   const A=T[from],D=T[to],fa=F[A.owner],fd=F[D.owner];
   const ap=A.troops*(0.85+Math.random()*0.4)*(1+0.15*(fa.era+fa.upArm));
   const dp=D.troops*(0.95+Math.random()*0.4)*(1+0.15*(fd.era+fd.upArm))*(1+D.base*0.2);
