@@ -12,17 +12,20 @@ function loadLegacy(code){
 /* ==================== GUARDADO (Base64) ====================
    v4 (Fase 2A): F[fac] guarda heroes/heroWeaponLv/heroProgress en vez de
    champ/champW. migrateFactionToV4 reconstruye ese estado desde un save
-   v1-v3 sin romper la partida guardada. */
+   v1-v3 sin romper la partida guardada. También rellena veterancy
+   (Fase 2D) si falta, sin importar si el resto ya era v4. */
 function migrateFactionToV4(f){
-  if(f.heroes)return; // ya es v4
-  f.heroes=[null,null,null];
-  f.heroWeaponLv=f.champW||1;
-  f.heroProgress={};
-  if(f.champ){
-    const heroId=Object.keys(HEROES).find(id=>HEROES[id].name===f.champ);
-    if(heroId)f.heroes[0]=heroId;
+  if(!f.heroes){
+    f.heroes=[null,null,null];
+    f.heroWeaponLv=f.champW||1;
+    f.heroProgress={};
+    if(f.champ){
+      const heroId=Object.keys(HEROES).find(id=>HEROES[id].name===f.champ);
+      if(heroId)f.heroes[0]=heroId;
+    }
+    delete f.champ;delete f.champW;
   }
-  delete f.champ;delete f.champW;
+  if(!f.veterancy)f.veterancy=nuevaVeterancia();
 }
 function saveGame(){
   if(!player){return "";}

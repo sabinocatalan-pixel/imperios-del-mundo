@@ -74,13 +74,52 @@ function counterMult(att,def){
   if(AIR_BONUS[att.kind]===def.kind)return 1.5; // ranged vs air, air vs heavy
   return 1;
 }
-// Reducción de daño recibido por pasivas/activas de héroes (Leónidas, Pachacútec).
+// Reducción de daño recibido por pasivas/activas de héroes (Leónidas, Pachacútec)
+// y por el rasgo de veteranía Nv3 de los melee (+5% def).
 function dmgTakenMult(tgt){
   const S=B.S[String(tgt.side)],f=F[S.fac],heroId=f.heroes[0];
   let mult=1;
   if(S.defBuffT>0)mult*=0.9; // Pachacútec: Reorganización Imperial (10s)
   if(heroId==="leonidas"&&S.champAlive&&tgt.kind==="melee")mult*=0.9; // Muro de Escudos
+  if(tgt.vetDefMult)mult*=tgt.vetDefMult;
   return mult;
+}
+
+/* ==================== VETERANÍA POR REGIMIENTO (Fase 2D) ====================
+   Por imperio × tipo de unidad (melee/ranged/heavy/air — los héroes no
+   forman parte de este sistema). Nv2 (30 XP): +8% daño. Nv3 (80 XP): +15%
+   daño (reemplaza el +8%, no se suman) + un rasgo menor por tipo. Los
+   rasgos visuales (drawStick) son SOLO cosméticos: la ventaja real es
+   exactamente esta, nunca más de lo que se ve aquí. */
+const VET_DMG_MULT={1:1,2:1.08,3:1.15};
+function applyVeterancy(u,kind,lvl){
+  u.vetLvl=lvl;
+  u.dmg*=VET_DMG_MULT[lvl]||1;
+  if(lvl>=3){
+    if(kind==="melee")u.vetDefMult=0.95; // +5% def -> -5% daño recibido
+    else if(kind==="ranged")u.rng*=1.1; // +10% alcance
+    else if(kind==="heavy")u.atk*=0.9; // -10% cd de ataque (ataca más seguido)
+    else if(kind==="air")u.spd*=1.1; // +10% velocidad
+  }
+}
+function applyVeterancyGains(){
+  for(const side of["1","-1"]){
+    const S=B.S[side],f=F[S.fac];
+    const won=(side==="1")===B.result;
+    if(!f.veterancy)f.veterancy=nuevaVeterancia();
+    for(const kind of["melee","ranged","heavy","air"]){
+      const spawned=S.spawnedTypes[kind]||0;
+      if(!spawned)continue;
+      const kills=S.killsByType[kind]||0;
+      const v=f.veterancy[kind];
+      v.xp=Math.min(80,v.xp+spawned*2+kills*1+(won?4:0));
+      // Derrota con muchas bajas (más de la mitad de lo desplegado de ese
+      // tipo): -20% de la barra acumulada.
+      const vivos=B.units.filter(u=>u.side===(side==="1"?1:-1)&&u.kind===kind&&u.hp>0).length;
+      const bajas=spawned-vivos;
+      if(!won&&bajas>spawned/2)v.xp=Math.max(0,v.xp-Math.round(v.xp*0.2));
+    }
+  }
 }
 
 /* ==================== BANNERS NARRATIVOS ====================
@@ -127,11 +166,13 @@ function openBattle(from,to,mode){
     S:{
       "1":{fac:pFacId,gold:80,income:9+pFac.upEco*1.4,
         cool:{melee:0,ranged:0,heavy:0,champ:0,spec:0,heroAbil:0,air:0},champAlive:false,
-        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0},
+        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
+        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0},killsByType:{melee:0,ranged:0,heavy:0,air:0}},
       "-1":{fac:eFacId,gold:pvp?80:60,
         income:pvp?(9+eFac.upEco*1.4):(8+eFac.era*1.2)*diffMult,
         cool:{melee:0,ranged:0,heavy:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20,air:0},champAlive:false,
-        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0}
+        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
+        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0},killsByType:{melee:0,ranged:0,heavy:0,air:0}}
     },
     eCool:0,turretT:0
   };
@@ -167,6 +208,8 @@ function spawnUnit(side,kind){
   P.gold-=cost;P.cool[kind]=st.cd;SFX.spawn();
   const u=mkUnit(+side,kind,f.era,f.upArm);
   if(B.pacing.desgaste){u.hp*=0.9;u.max*=0.9;} // desgaste (180s): refuerzos con -10% PV máx
+  P.spawnedTypes[kind]=(P.spawnedTypes[kind]||0)+1;
+  applyVeterancy(u,kind,veteranLevel((f.veterancy&&f.veterancy[kind]?f.veterancy[kind].xp:0)));
   B.units.push(u);
 }
 function spawnChamp(side){
@@ -277,10 +320,12 @@ function buildBattleButtons(){
       tag.textContent=(side==="1"?"◀ ":"")+fname(facId)+(side==="-1"?" ▶":"");
       box.appendChild(tag);
     }
+    const vetTag=k=>{const lvl=veteranLevel((f.veterancy&&f.veterancy[k]?f.veterancy[k].xp:0));
+      return lvl>1?` ${"★".repeat(lvl-1)}`:"";};
     for(const k of["melee","ranged","heavy"]){
       const st=unitStats(k,f.era,f.upArm);
       const b=document.createElement("button");b.className="ub";
-      b.innerHTML=`${icons[k]} ${UNIT_NAMES[f.era][k]}<small>${st.cost}🪙 · <span class="carrow">${CARROW[k]}</span></small><div class="cdo"></div>`;
+      b.innerHTML=`${icons[k]} ${UNIT_NAMES[f.era][k]}${vetTag(k)}<small>${st.cost}🪙 · <span class="carrow">${CARROW[k]}</span></small><div class="cdo"></div>`;
       b.onclick=()=>spawnUnit(side,k);
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:k});
@@ -288,7 +333,7 @@ function buildBattleButtons(){
     if(f.era>=2){ // unidades aéreas: Época Industrial en adelante
       const st=unitStats("air",f.era,f.upArm);
       const b=document.createElement("button");b.className="ub";
-      b.innerHTML=`✈️ ${UNIT_NAMES[f.era].air}<small>${st.cost}🪙 · máx. 2</small><div class="cdo"></div>`;
+      b.innerHTML=`✈️ ${UNIT_NAMES[f.era].air}${vetTag("air")}<small>${st.cost}🪙 · máx. 2</small><div class="cdo"></div>`;
       b.onclick=()=>spawnUnit(side,"air");
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:"air"});
@@ -488,6 +533,8 @@ function bloop(now){
             }
           }
           if(tgt.hp<=0){
+            const kb=B.S[String(u.side)].killsByType;
+            if(kb&&kb[u.kind]!==undefined)kb[u.kind]++; // veteranía: baja enemiga +1 XP al regimiento que la logró
             if(tgt.kind==="ranged"&&u.heroId==="tomoegozen")heroProgressBump(B.S[String(u.side)].fac,"tomoegozen","rangedKills");
             if(tgt.kind==="champ"&&tgt.heroId==="amaru"&&!B.S[String(tgt.side)].amaruRevived){
               // Renacer de la Serpiente: 1 vez/batalla, revive con 50% PV y aturde alrededor
@@ -655,6 +702,16 @@ function drawStick(u){
   }
   bx.fillStyle="rgba(0,0,0,.5)";bx.fillRect(x-12,g-flyOff-46*u.size,24,3);
   bx.fillStyle="#7ED66E";bx.fillRect(x-12,g-flyOff-46*u.size,24*Math.max(0,u.hp/u.max),3);
+  // Rasgos visuales de veteranía (Fase 2D) — SOLO cosméticos, la ventaja
+  // real ya está aplicada en applyVeterancy(); esto solo comunica estatus.
+  if(u.vetLvl>=2){
+    bx.fillStyle=u.vetLvl>=3?"#FFD866":FACTIONS[u.side===1?B.pFacId:B.eFacId].color;
+    bx.beginPath();bx.arc(x,g-flyOff-52*u.size,2.6*u.size,0,7);bx.fill();
+  }
+  if(u.vetLvl>=3){
+    bx.strokeStyle="#FFD866";bx.lineWidth=1.6;
+    bx.beginPath();bx.moveTo(x,g-flyOff-55*u.size);bx.lineTo(x,g-flyOff-63*u.size);bx.stroke();
+  }
 }
 function drawCorpse(cp){
   bx.save();bx.globalAlpha=Math.min(0.8,cp.t);
@@ -766,6 +823,7 @@ function finishBattle(win,retreat=false){
     if(heroId==="anibal"&&wonThisSide)heroProgressBump(fid,"anibal","wins");
     if(heroId==="leonidas"&&S.champAlive)heroProgressBump(fid,"leonidas","battlesSurvived");
   }
+  applyVeterancyGains(); // XP de regimiento (Fase 2D), antes de que B.units cambie más
   if(win){SFX.win();burstScreen([FACTIONS[me].color,"#D9A441","#E8DCC0"],110);}
   else{SFX.lose();if(B.pvp)burstScreen([FACTIONS[foe].color,"#E8DCC0"],90);}
   const{from,to,mode}=B;

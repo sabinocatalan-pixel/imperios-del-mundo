@@ -14,11 +14,18 @@ const MISSION_DEFS=[
   {id:"cont",t:"Controla un continente completo",r:50}
 ];
 
+// Veteranía por regimiento (Fase 2D): por imperio × tipo de unidad, se
+// guarda por partida (save v4), no en el legado. El nivel es siempre una
+// función pura de la XP acumulada (tope 80, sin estado de nivel aparte).
+function nuevaVeterancia(){return{melee:{xp:0},ranged:{xp:0},heavy:{xp:0},air:{xp:0}};}
+function veteranLevel(xp){return xp>=80?3:xp>=30?2:1;}
+
 function reset(){
   T={};F={};
   for(const id in TERR)T[id]={owner:TERR[id].f,troops:6,pop:10,base:0,plague:0};
   for(const f in FACTIONS)F[f]={gold:40,food:20,science:0,faith:0,culture:0,era:0,
-    upArm:0,upEco:0,upMed:0,heroes:[null,null,null],heroWeaponLv:1,heroProgress:{},ai:true};
+    upArm:0,upEco:0,upMed:0,heroes:[null,null,null],heroWeaponLv:1,heroProgress:{},
+    veterancy:nuevaVeterancia(),ai:true};
   player=null;round=1;phase="pick";selected=null;inBattle=false;aiCont=null;scenario=null;
   humans=[];turnIdx=0;pendingOffer=null;
   rel={};pacts=[];
