@@ -2,7 +2,8 @@
    Estado global, reset/startGame/startScenario/escenarios y helpers. */
 /* ==================== ESTADO ==================== */
 let T,F,player,round,phase,selected,inBattle=false,diffMult=1,
-    rel,pacts,missions,aiCont=null,humans=[],turnIdx=0,pickMode=1,pendingOffer=null;
+    rel,pacts,missions,aiCont=null,humans=[],turnIdx=0,pickMode=1,pendingOffer=null,
+    coalition=null,worldBannerTimer=null;
 
 const MISSION_DEFS=[
   {id:"conq1",t:"Conquista tu primer territorio",r:25},
@@ -27,7 +28,7 @@ function reset(){
     upArm:0,upEco:0,upMed:0,heroes:[null,null,null],heroWeaponLv:1,heroProgress:{},
     veterancy:nuevaVeterancia(),ai:true};
   player=null;round=1;phase="pick";selected=null;inBattle=false;aiCont=null;scenario=null;
-  humans=[];turnIdx=0;pendingOffer=null;
+  humans=[];turnIdx=0;pendingOffer=null;coalition=null;
   rel={};pacts=[];
   for(const a in FACTIONS)for(const b in FACTIONS)if(a!==b)rel[a+b]=0;
   missions=MISSION_DEFS.map(m=>({...m,done:false}));
@@ -126,6 +127,12 @@ function log(m,c=""){const d=document.createElement("div");d.textContent=`[R${ro
 // turnSummaryLines se reinicia al empezar cada ronda (startRound).
 let turnSummaryLines=[];
 function logCausal(m,c=""){log(m,c);if(turnSummaryLines.length<20)turnSummaryLines.push({m,c});}
+function showWorldBanner(title,text){
+  const b=$("worldBanner");if(!b)return;
+  $("worldBannerTitle").textContent=title;$("worldBannerText").textContent=text;
+  b.style.display="flex";clearTimeout(worldBannerTimer);
+  worldBannerTimer=setTimeout(()=>{b.style.display="none";},4000);
+}
 function ownedBy(f){return Object.keys(T).filter(id=>T[id].owner===f);}
 function alive(){return[...new Set(Object.values(T).map(t=>t.owner))];}
 function pactBetween(a,b){return pacts.find(p=>p.rounds>0&&((p.a===a&&p.b===b)||(p.a===b&&p.b===a)));}

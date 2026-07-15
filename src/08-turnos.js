@@ -6,6 +6,7 @@ function startRound(){
   turnSummaryLines=[]; // nueva ronda: reinicia lo que verá el Resumen del turno
   autoSaveGame();
   incomePhase();
+  updateCoalition();
   if(checkEnd())return;
   checkScenario();if(phase==="over")return;
   turnIdx=0;beginHumanTurn();
@@ -66,6 +67,52 @@ function closeTurnSummary(){
   clearTimeout(turnSummaryTimer);
   $("resumenModal").style.display="none";
 }
+/* ==================== COALICIÓN ANTI-LÍDER (Fase 2E) ==================== */
+function empirePower(fid){
+  const ids=ownedBy(fid),f=F[fid];
+  return ids.length*3+f.gold/50+f.science/30+
+    ids.reduce((n,id)=>n+T[id].troops,0)*0.5+
+    ids.reduce((n,id)=>n+T[id].base,0)*2+(f.heroes[0]?2:0);
+}
+function leaderThreat(){
+  const vivos=alive();if(vivos.length<2)return{leader:vivos[0]||null,threat:0,average:0};
+  const powers=vivos.map(fid=>({fid,p:empirePower(fid)})).sort((a,b)=>b.p-a.p);
+  const leader=powers[0],average=powers.slice(1).reduce((n,x)=>n+x.p,0)/(powers.length-1);
+  return{leader:leader.fid,threat:average>0?(leader.p-average)/average:0,average};
+}
+function coalitionChance(threat){return Math.max(0,Math.min(0.75,(threat-0.25)*0.8));}
+function isNeighborEmpire(a,b){return ownedBy(a).some(id=>ADJ[id].some(x=>T[x].owner===b));}
+function coalitionDesire(fid,leader,threat){
+  return threat*0.4+(relGet(fid,leader)<0?0.25:0)+(isNeighborEmpire(fid,leader)?0.15:0)+
+    FACTIONS[fid].aggr*0.10-(pactBetween(fid,leader)?0.25:0);
+}
+function expireCoalition(reason){
+  if(!coalition)return;
+  logCausal(`🌍 La coalición contra ${fname(coalition.leader)} se disolvió: ${reason}.`);
+  pacts=pacts.filter(p=>!p.coalition);coalition=null;
+}
+function updateCoalition(){
+  if(diffMult<1.3||round<8)return;
+  const a=leaderThreat();
+  if(coalition){
+    if(a.leader!==coalition.leader||a.threat<0.15)return expireCoalition("la amenaza cayó por debajo del 15%");
+    coalition.rounds--;
+    if(coalition.rounds<=0)return expireCoalition("terminaron sus 5 rondas");
+    logCausal(`🌍 Coalición contra ${fname(coalition.leader)}: ${coalition.rounds} rondas restantes.`);
+    return;
+  }
+  if(a.threat<=0.25||Math.random()>=coalitionChance(a.threat))return;
+  const threshold=diffMult===1.5?0.35:0.45;
+  const members=alive().filter(fid=>fid!==a.leader&&coalitionDesire(fid,a.leader,a.threat)>threshold);
+  if(members.length<2)return;
+  coalition={leader:a.leader,members,rounds:5};
+  pacts=pacts.filter(p=>!members.some(m=>(p.a===m&&p.b===a.leader)||(p.b===m&&p.a===a.leader)));
+  for(let i=0;i<members.length;i++)for(let j=i+1;j<members.length;j++)
+    if(!pactBetween(members[i],members[j]))pacts.push({a:members[i],b:members[j],type:"ali",rounds:5,coalition:true});
+  const names=members.map(fname).join(", ");
+  const msg=`${names} forman una COALICIÓN para contener a ${fname(a.leader)} — 5 rondas.`;
+  showWorldBanner("🌍 COALICIÓN MUNDIAL",msg);logCausal(`🌍 ${msg}`,a.leader===player?"loss":"");
+}
 function aiTurns(fromTurnFlow){
   if(inBattle)return;
   if(!fromTurnFlow&&phase!=="play")return;
@@ -124,7 +171,9 @@ function aiTurns(fromTurnFlow){
       for(const from of ownedBy(fid)){
         if(lanzado)break;
         let tg=ADJ[from].filter(x=>T[x].owner!==fid&&!pactBetween(fid,T[x].owner));
-        if(P.pers==="oportunista")tg.sort((a,b)=>T[a].troops-T[b].troops);
+        const objetivoCoalicion=coalition&&coalition.members.includes(fid)?coalition.leader:null;
+        if(objetivoCoalicion)tg.sort((a,b)=>(T[b].owner===objetivoCoalicion)-(T[a].owner===objetivoCoalicion));
+        else if(P.pers==="oportunista")tg.sort((a,b)=>T[a].troops-T[b].troops);
         else tg.sort((a,b)=>(T[a].troops+T[a].base*3)-(T[b].troops+T[b].base*3));
         for(const to of tg){
           const hostil=relGet(fid,T[to].owner)<20||humans.includes(T[to].owner);

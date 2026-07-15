@@ -29,6 +29,10 @@
   .res b{color:var(--gold)}
   #status{width:100%;max-width:1080px;padding:5px 14px;text-align:center;font-size:13.5px;min-height:30px;line-height:1.35}
   #status strong{color:var(--gold)}
+  #worldBanner{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;pointer-events:none;background:rgba(5,14,19,.38)}
+  #worldBanner>div{max-width:min(88vw,620px);padding:18px 22px;border:1px solid var(--gold);border-radius:10px;background:rgba(8,22,29,.96);text-align:center;box-shadow:0 8px 30px #000}
+  #worldBanner strong{display:block;color:var(--gold);font:700 24px Impact,Arial;letter-spacing:.8px}
+  #worldBanner span{display:block;margin-top:7px;font-size:14px;line-height:1.4}
   #mapwrap{width:100%;max-width:1080px;padding:0 6px}
   svg{width:100%;height:auto;display:block}
   .terr{cursor:pointer;transition:filter .15s;stroke:rgba(10,22,28,.9);stroke-width:1.6}
