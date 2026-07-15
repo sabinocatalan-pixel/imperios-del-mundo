@@ -92,6 +92,7 @@ function renderEmp(){
       <span>${activeHero?("⭐ "+activeHero.name+" (arma nv"+f.heroWeaponLv+")"):"Sin héroe activo"}</span></div>
     ${councilNames?`<div class="row" style="opacity:.75">Consejo: ${councilNames}</div>`:""}
     <div class="row" style="opacity:.75">⚔️ Armamento nv${f.upArm} · 💰 Economía nv${f.upEco} · 🏥 Medicina nv${f.upMed}</div>
+    ${coalition&&coalition.leader===player?`<div class="row" style="color:var(--danger)"><b>🌍 Coalición en tu contra: ${coalition.rounds} rondas</b></div>`:""}
     ${contHtml}
     <div class="row" style="opacity:.7">Victoria: conquista total · 🎭${CULT_WIN} · ✨${FAITH_WIN}</div>`;
   if(phase!=="play")return;

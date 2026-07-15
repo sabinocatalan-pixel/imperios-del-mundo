@@ -98,19 +98,22 @@ function updateCoalition(){
     if(a.leader!==coalition.leader||a.threat<0.15)return expireCoalition("la amenaza cayó por debajo del 15%");
     coalition.rounds--;
     if(coalition.rounds<=0)return expireCoalition("terminaron sus 5 rondas");
-    logCausal(`🌍 Coalición contra ${fname(coalition.leader)}: ${coalition.rounds} rondas restantes.`);
+    logCausal(coalition.leader===player
+      ?`🌍 Coalición activa: ${coalition.rounds} rondas restantes en tu contra.`
+      :`🌍 Coalición activa contra ${fname(coalition.leader)}: ${coalition.rounds} rondas restantes.`);
     return;
   }
   if(a.threat<=0.25||Math.random()>=coalitionChance(a.threat))return;
-  const threshold=diffMult===1.5?0.35:0.45;
-  const members=alive().filter(fid=>fid!==a.leader&&coalitionDesire(fid,a.leader,a.threat)>threshold);
+  const members=alive().filter(fid=>fid!==a.leader&&coalitionDesire(fid,a.leader,a.threat)>0.45);
   if(members.length<2)return;
   coalition={leader:a.leader,members,rounds:5};
   pacts=pacts.filter(p=>!members.some(m=>(p.a===m&&p.b===a.leader)||(p.b===m&&p.a===a.leader)));
   for(let i=0;i<members.length;i++)for(let j=i+1;j<members.length;j++)
     if(!pactBetween(members[i],members[j]))pacts.push({a:members[i],b:members[j],type:"ali",rounds:5,coalition:true});
   const names=members.map(fname).join(", ");
-  const msg=`${names} forman una COALICIÓN para contener a ${fname(a.leader)} — 5 rondas.`;
+  const msg=a.leader===player
+    ?`Tu imperio domina el mundo. ${names} forman una COALICIÓN para contenerte — 5 rondas.`
+    :`${fname(a.leader)} domina el mundo. ${names} forman una COALICIÓN para contenerlo — 5 rondas.`;
   showWorldBanner("🌍 COALICIÓN MUNDIAL",msg);logCausal(`🌍 ${msg}`,a.leader===player?"loss":"");
 }
 function aiTurns(fromTurnFlow){
