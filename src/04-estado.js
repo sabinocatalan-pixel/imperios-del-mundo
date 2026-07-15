@@ -18,7 +18,7 @@ const MISSION_DEFS=[
 // Veteranía por regimiento (Fase 2D): por imperio × tipo de unidad, se
 // guarda por partida (save v4), no en el legado. El nivel es siempre una
 // función pura de la XP acumulada (tope 80, sin estado de nivel aparte).
-function nuevaVeterancia(){return{melee:{xp:0},ranged:{xp:0},heavy:{xp:0},air:{xp:0}};}
+function nuevaVeterancia(){return{melee:{xp:0},ranged:{xp:0},heavy:{xp:0},air:{xp:0},healer:{xp:0},siege:{xp:0}};}
 function veteranLevel(xp){return xp>=80?3:xp>=30?2:1;}
 
 function reset(){

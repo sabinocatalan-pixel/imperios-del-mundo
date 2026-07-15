@@ -56,9 +56,9 @@ const ERA_COST=[0,35,80,150];
 const RESICON={oro:"🪙",comida:"🌾",ciencia:"🔬",fe:"✨"};
 const SPECIALS=["☄️ Lluvia de meteoros","🔥 Flechas de fuego","💣 Bombardeo","✈️ Ataque aéreo"];
 const UNIT_NAMES=[
-  {melee:"Guerrero",ranged:"Hondero",heavy:"Mamut"},
-  {melee:"Espadachín",ranged:"Arquero",heavy:"Caballero"},
-  {melee:"Fusilero",ranged:"Mosquetero",heavy:"Cañón",air:"Biplano"},
-  {melee:"Soldado",ranged:"Francotirador",heavy:"Tanque",air:"Caza"}
+  {melee:"Guerrero",ranged:"Hondero",heavy:"Mamut",healer:"Chamán",siege:"Catapulta"},
+  {melee:"Espadachín",ranged:"Arquero",heavy:"Caballero",healer:"Monje",siege:"Trebuchet"},
+  {melee:"Fusilero",ranged:"Mosquetero",heavy:"Cañón",air:"Biplano",healer:"Médico",siege:"Mortero"},
+  {melee:"Soldado",ranged:"Francotirador",heavy:"Tanque",air:"Caza",healer:"Médico de campaña",siege:"Artillería"}
 ];
 const CULT_WIN=250,FAITH_WIN=250;

@@ -10,11 +10,10 @@ function loadLegacy(code){
 }
 
 /* ==================== GUARDADO (Base64) ====================
-   v4 (Fase 2A): F[fac] guarda heroes/heroWeaponLv/heroProgress en vez de
-   champ/champW. migrateFactionToV4 reconstruye ese estado desde un save
-   v1-v3 sin romper la partida guardada. También rellena veterancy
-   (Fase 2D) si falta, sin importar si el resto ya era v4. */
-function migrateFactionToV4(f){
+   v5 (Fase 3A): añade veteranía de sanador y asedio. migrateFactionToV5
+   conserva la migración de héroes v1-v3 y completa cualquier veteranía
+   parcial de v4 sin romper la partida guardada. */
+function migrateFactionToV5(f){
   if(!f.heroes){
     f.heroes=[null,null,null];
     f.heroWeaponLv=f.champW||1;
@@ -26,10 +25,12 @@ function migrateFactionToV4(f){
     delete f.champ;delete f.champW;
   }
   if(!f.veterancy)f.veterancy=nuevaVeterancia();
+  const base=nuevaVeterancia();
+  for(const kind in base)if(!f.veterancy[kind])f.veterancy[kind]={xp:0};
 }
 function saveGame(){
   if(!player){return "";}
-  const data={v:4,T,Fx:F,player,round,diffMult,rel,humans,
+  const data={v:5,T,Fx:F,player,round,diffMult,rel,humans,
     pacts:pacts.map(p=>({a:p.a,b:p.b,type:p.type,rounds:p.rounds,coalition:!!p.coalition})),
     mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,coalition,eventHistory,warHistory};
   return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
@@ -37,9 +38,9 @@ function saveGame(){
 function loadGame(code){
   try{
     const d=JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
-    if(![1,2,3,4].includes(d.v))throw 0;
+    if(![1,2,3,4,5].includes(d.v))throw 0;
     T=d.T;F=d.Fx;player=d.player;round=d.round;diffMult=d.diffMult;
-    for(const fid in F)migrateFactionToV4(F[fid]);
+    for(const fid in F)migrateFactionToV5(F[fid]);
     humans=d.humans||[d.player];turnIdx=0;pendingOffer=null;player=humans[0];
     rel=d.rel;pacts=d.pacts;coalition=d.coalition||null;
     eventHistory=d.eventHistory||[];warHistory=d.warHistory||[];
