@@ -835,6 +835,11 @@ test("Asedio: arco, rango mínimo, prioridad de base y vulnerabilidad coherente"
     g.win.eval('bloop(B.last+50)');
     assert.ok(g.win.eval('B.eHP')<baseAntes,"asedio debe priorizar base/torreta al entrar en alcance");
     assert.strictEqual(g.win.eval('B.baseDecoy.hp'),decoyAntes,"la prioridad de base debe superar al objetivo terrestre");
+
+    g.win.eval('B.eHP=B.eMax;B.siege.t=0;B.baseDecoy.kind="melee";B.baseDecoy.x=B.siege.x+50;');
+    const baseSuprimida=g.win.eval('B.eHP');
+    g.win.eval('bloop(B.last+50)');
+    assert.strictEqual(g.win.eval('B.eHP'),baseSuprimida,"un melee a <80px anula incluso el disparo prioritario contra la base");
   }finally{closeGame(g);}
 });
 
