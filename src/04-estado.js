@@ -58,11 +58,21 @@ function applyLegacyBonuses(){
   if(LEGACY.wins>=5)f.upEco=Math.max(f.upEco,1);
 }
 function startGame(mult){
+  if(mult===1.5&&LEGACY.hardWins<1){alert("Pesadilla se desbloquea al ganar una partida en Difícil.");return false;}
   diffMult=mult;scenario=null;SFX.click();
   closeModals();
   setStatus(pickMode===2
     ?"👤 <strong>Jugador 1</strong>: toca el territorio de tu imperio."
     :"Elige tu imperio: <strong>toca un territorio</strong> y jugarás con esa facción.");
+  return true;
+}
+function difficultyName(){return diffMult===1.5?"Pesadilla":diffMult<1?"Fácil":diffMult>1?"Difícil":"Normal";}
+function difficultyAllowsHero(id){
+  const r=ALL_HEROES[id]&&ALL_HEROES[id].rarity;
+  if(diffMult<1)return r!=="mitico";
+  if(diffMult===1)return r==="comun"||r==="raro";
+  if(diffMult<1.5)return r!=="mitico";
+  return true;
 }
 function startScenario(i){
   const s=SCENARIOS[i];scenario=s;diffMult=s.diff;pickMode=1;SFX.click();

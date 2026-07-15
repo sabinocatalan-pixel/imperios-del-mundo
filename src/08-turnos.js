@@ -89,12 +89,12 @@ function aiTurns(fromTurnFlow){
     if(f.gold>=60&&f.upArm<3&&Math.random()<0.3){f.gold-=40;f.upArm++;}
     if(P.eco>0.6&&f.gold>=60&&f.upEco<3&&Math.random()<0.4){f.gold-=35;f.upEco++;}
     if(!f.heroes[0]&&Math.random()<0.25){
-      const avail=Object.keys(ALL_HEROES).filter(id=>ALL_HEROES[id].tipoAtaque&&isHeroUnlocked(id));
+      const avail=Object.keys(ALL_HEROES).filter(id=>ALL_HEROES[id].tipoAtaque&&isHeroUnlocked(id)&&difficultyAllowsHero(id));
       if(avail.length)setHeroSlot(fid,0,avail[Math.floor(Math.random()*avail.length)]);
     }
     for(const slot of[1,2]){ // consejo: misma regla que el activo (pilar 4: sin ayudas para la IA, tampoco desventajas)
       if(!f.heroes[slot]&&Math.random()<0.25){
-        const avail=Object.keys(ALL_HEROES).filter(id=>isHeroUnlocked(id)&&!f.heroes.includes(id));
+        const avail=Object.keys(ALL_HEROES).filter(id=>isHeroUnlocked(id)&&difficultyAllowsHero(id)&&!f.heroes.includes(id));
         if(avail.length)setHeroSlot(fid,slot,avail[Math.floor(Math.random()*avail.length)]);
       }
     }
@@ -112,35 +112,41 @@ function aiTurns(fromTurnFlow){
           logCausal(`⚠️ ${P.name} te exigirá tributo.`);}
       }
     }
-    // decidir ataque (personalidad + pactos + relación)
+    // Pesadilla permite hasta dos ataques reales por imperio y ronda. Cada
+    // pase vuelve a leer el mapa, porque el primero puede cambiar fronteras.
+    const maxAtaques=diffMult===1.5?2:1;
     const thr=P.aggr>0.7?1.1:(P.aggr>0.45?1.3:1.6);
-    let done=false;
-    for(const from of ownedBy(fid)){
-      if(done)break;
-      let tg=ADJ[from].filter(x=>T[x].owner!==fid&&!pactBetween(fid,T[x].owner));
-      if(P.pers==="oportunista")tg.sort((a,b)=>T[a].troops-T[b].troops);
-      else tg.sort((a,b)=>(T[a].troops+T[a].base*3)-(T[b].troops+T[b].base*3));
-      for(const to of tg){
-        const hostil=relGet(fid,T[to].owner)<20||humans.includes(T[to].owner);
-        if(hostil&&T[from].troops>T[to].troops*thr&&T[from].troops>5&&Math.random()<P.aggr){
-          arrowFX(from,to);
-          if(humans.includes(T[to].owner)){
-            // ¡defensa en vivo del humano dueño!
-            logCausal(`⚔️ ¡${P.name} ataca ${TERR[to].n}! Defiende tu territorio.`,"loss");
-            openBattle(from,to,"defense");
-            done=true;aiCont=step;render();return;
+    f.attacksThisRound=0;
+    function terminarFaccion(){render();if(!checkEnd())setTimeout(step,380);}
+    function paseAtaque(n){
+      if(n>=maxAtaques)return terminarFaccion();
+      let lanzado=false;
+      for(const from of ownedBy(fid)){
+        if(lanzado)break;
+        let tg=ADJ[from].filter(x=>T[x].owner!==fid&&!pactBetween(fid,T[x].owner));
+        if(P.pers==="oportunista")tg.sort((a,b)=>T[a].troops-T[b].troops);
+        else tg.sort((a,b)=>(T[a].troops+T[a].base*3)-(T[b].troops+T[b].base*3));
+        for(const to of tg){
+          const hostil=relGet(fid,T[to].owner)<20||humans.includes(T[to].owner);
+          if(hostil&&T[from].troops>T[to].troops*thr&&T[from].troops>5&&Math.random()<P.aggr){
+            arrowFX(from,to);lanzado=true;f.attacksThisRound++;
+            if(humans.includes(T[to].owner)){
+              logCausal(`⚔️ ¡${P.name} ataca ${TERR[to].n}! Defiende tu territorio.`,"loss");
+              openBattle(from,to,"defense");
+              aiCont=()=>paseAtaque(n+1);render();return;
+            }
+            const atacado=T[to].owner,r=autoBattle(from,to);
+            relAdd(fid,atacado,-15);
+            if(r.win){flashTerr(to);logCausal(`${FACTIONS[fid].emb} ${P.name} conquistó ${TERR[to].n}.`);}
+            else logCausal(`${P.name} fue rechazado en ${TERR[to].n}.`);
+            break;
           }
-          const r=autoBattle(from,to);
-          relAdd(fid,T[to].owner,-15);
-          if(r.win){flashTerr(to);logCausal(`${FACTIONS[fid].emb} ${P.name} conquistó ${TERR[to].n}.`);}
-          else logCausal(`${P.name} fue rechazado en ${TERR[to].n}.`);
-          done=true;break;
         }
       }
+      if(lanzado&&n+1<maxAtaques)setTimeout(()=>paseAtaque(n+1),80);
+      else terminarFaccion();
     }
-    render();
-    if(checkEnd())return;
-    setTimeout(step,380);
+    paseAtaque(0);
   }
   setTimeout(step,380);
 }
@@ -165,7 +171,7 @@ function clickTerr(id){
     if(humans.length===1)applyLegacyBonuses();
     log(humans.length===2
       ?`👥 Duelo: ${fname(humans[0])} vs ${fname(humans[1])} (+4 imperios IA).`
-      :`Tomaste el mando del ${fname(fid)} (dificultad ${diffMult<1?"Fácil":diffMult>1?"Difícil":"Normal"}).`,"win");
+      :`Tomaste el mando del ${fname(fid)} (dificultad ${difficultyName()}).`,"win");
     round=1;startRound();return;
   }
   if(phase!=="play")return;

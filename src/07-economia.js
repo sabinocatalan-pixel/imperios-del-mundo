@@ -82,6 +82,7 @@ function checkEnd(){
 function endGame(title,text,won=true,winner=null){
   phase="over";
   if(won&&!scenario&&humans.length===1)LEGACY.wins++;
+  if(won&&!scenario&&humans.length===1&&diffMult===1.3)LEGACY.hardWins=(LEGACY.hardWins|0)+1;
   if(won&&player)checkHeroLegacyUnlocks(player,won);
   autoSaveLegacy();
   $("ovTitle").textContent=title;$("ovText").textContent=text;

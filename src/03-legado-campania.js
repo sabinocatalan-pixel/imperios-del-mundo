@@ -1,7 +1,7 @@
 /* ==================== 03-legado-campania.js ====================
    LEGACY (progresión permanente) y SCENARIOS (campaña).
    legacyCode/loadLegacy viven en 10-guardado.js. */
-const LEGACY={wins:0,scen:{},heroes:{}};
+const LEGACY={wins:0,hardWins:0,scen:{},heroes:{}};
 function legacyDesc(){
   const b=[];
   if(LEGACY.wins>=1)b.push("⭐ El Cid desbloqueado");
@@ -9,6 +9,7 @@ function legacyDesc(){
   if(LEGACY.wins>=3)b.push("⚔️ Héroe activo inicia con arma nv2");
   if(LEGACY.wins>=5)b.push("💰 Economía nv1 inicial");
   if(LEGACY.heroes&&LEGACY.heroes.amaru)b.push("⭐ Amaru desbloqueado");
+  if(LEGACY.hardWins>=1)b.push("💀 Pesadilla desbloqueada");
   return b;
 }
 function renderLegacy(){
@@ -17,6 +18,7 @@ function renderLegacy(){
   const b=legacyDesc();
   el.innerHTML=`🏆 Victorias: <b style="color:var(--gold)">${LEGACY.wins}</b> · Escenarios: <b style="color:var(--gold)">${done}/5</b>`+
     (b.length?"<br><span style='font-size:12px'>"+b.join(" · ")+"</span>":"<br><span style='font-size:12px;opacity:.7'>Gana partidas para desbloquear mejoras permanentes.</span>");
+  const pes=$("nightmareBtn");if(pes){const ok=LEGACY.hardWins>=1;pes.disabled=!ok;pes.textContent=ok?"💀 Pesadilla":"💀 Pesadilla 🔒";}
 }
 
 const SCENARIOS=[

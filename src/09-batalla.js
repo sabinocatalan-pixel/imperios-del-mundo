@@ -378,11 +378,12 @@ function buildBattleButtons(){
 }
 function enemyAI(dt){
   const P=B.S["-1"],eF=F[P.fac];
+  const pesadilla=diffMult===1.5;
   B.eCool-=dt;
   // especial de la IA cuando el jugador acumula ejército
-  if(P.cool.spec<=0&&B.units.filter(u=>u.side===1).length>=3)useSpecial("-1");
+  if(P.cool.spec<=0&&(pesadilla||B.units.filter(u=>u.side===1).length>=3))useSpecial("-1");
   // héroe de la IA si su imperio tiene uno equipado
-  if(eF.heroes[0]&&!P.champAlive&&P.cool.champ<=0&&B.time>12)spawnChamp("-1");
+  if(eF.heroes[0]&&!P.champAlive&&P.cool.champ<=0&&(pesadilla||B.time>12))spawnChamp("-1");
   if(P.champAlive&&P.cool.heroAbil<=0){
     const hero=ALL_HEROES[eF.heroes[0]];
     if(hero&&hero.habilidad&&hero.habilidad.tipo==="activa")useHeroAbility("-1");
@@ -396,7 +397,7 @@ function enemyAI(dt){
   const affordable=["melee","ranged","heavy"].filter(k=>P.gold>=unitStats(k,eF.era,eF.upArm).cost);
   if(!affordable.length)return;
   let pick;
-  const cpChance=diffMult>1.15?0.5:0.3;
+  const cpChance=pesadilla?0.65:diffMult>1.15?0.5:0.3;
   if(Math.random()<cpChance){
     const counts={melee:0,ranged:0,heavy:0};
     B.units.forEach(u=>{if(u.side===1&&counts[u.kind]!==undefined)counts[u.kind]++;});

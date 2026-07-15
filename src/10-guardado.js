@@ -4,7 +4,7 @@ function legacyCode(){return "LEG1."+btoa(unescape(encodeURIComponent(JSON.strin
 function loadLegacy(code){
   try{const raw=code.trim();if(!raw.startsWith("LEG1."))throw 0;
     const d=JSON.parse(decodeURIComponent(escape(atob(raw.slice(5)))));
-    LEGACY.wins=d.wins|0;LEGACY.scen=d.scen||{};LEGACY.heroes=d.heroes||{};
+    LEGACY.wins=d.wins|0;LEGACY.hardWins=d.hardWins|0;LEGACY.scen=d.scen||{};LEGACY.heroes=d.heroes||{};
     renderLegacy();return true;
   }catch(e){alert("Código de legado inválido.");return false;}
 }
@@ -43,7 +43,7 @@ function loadGame(code){
     humans=d.humans||[d.player];turnIdx=0;pendingOffer=null;player=humans[0];
     rel=d.rel;pacts=d.pacts;
     missions=MISSION_DEFS.map((m,i)=>({...m,done:!!d.mis[i]}));
-    if(d.leg){LEGACY.wins=d.leg.wins|0;LEGACY.scen=d.leg.scen||{};LEGACY.heroes=d.leg.heroes||{};}
+    if(d.leg){LEGACY.wins=d.leg.wins|0;LEGACY.hardWins=d.leg.hardWins|0;LEGACY.scen=d.leg.scen||{};LEGACY.heroes=d.leg.heroes||{};}
     scenario=d.scn?SCENARIOS.find(x=>x.id===d.scn)||null:null;
     phase="play";selected=null;inBattle=false;aiCont=null;
     closeModals();$("battle").style.display="none";

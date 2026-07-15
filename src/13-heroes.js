@@ -221,7 +221,7 @@ function renderPanteon() {
   h += `<div class="heroGrid">`;
   for (const id of Object.keys(ALL_HEROES)) {
     const hero = ALL_HEROES[id];
-    const unlocked = isHeroUnlocked(id);
+    const unlocked = isHeroUnlocked(id) && (panteonMode !== "equipar" || difficultyAllowsHero(id));
     const f = panteonFac ? F[panteonFac] : null;
     const slot = f ? f.heroes.indexOf(id) : -1;
     h += `<div class="heroCard rar-${hero.rarity} ${unlocked ? "" : "locked"} ${slot >= 0 ? "equipped" : ""}"
