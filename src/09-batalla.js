@@ -89,25 +89,27 @@ function openBattle(from,to,mode){
     pHP:0,pMax:0,eHP:0,eMax:0,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],
     duel:null,duelDone:false,
+    pacing:{tension:false,muerteSubita:false,desgaste:false,resuelto:false},
     stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
     last:performance.now(),
     S:{
       "1":{fac:pFacId,gold:80,income:9+pFac.upEco*1.4,
-        cool:{melee:0,ranged:0,heavy:0,champ:0,spec:0,heroAbil:0},champAlive:false,
-        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false},
+        cool:{melee:0,ranged:0,heavy:0,champ:0,spec:0,heroAbil:0,air:0},champAlive:false,
+        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0},
       "-1":{fac:eFacId,gold:pvp?80:60,
         income:pvp?(9+eFac.upEco*1.4):(8+eFac.era*1.2)*diffMult,
-        cool:{melee:0,ranged:0,heavy:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20},champAlive:false,
-        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false}
+        cool:{melee:0,ranged:0,heavy:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20,air:0},champAlive:false,
+        spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0}
     },
     eCool:0,turretT:0
   };
+  // Bases +15% PV (Fase 2C) respecto al balance anterior.
   if(mode==="attack"){
-    B.pHP=B.pMax=330+pFac.upArm*40;
-    B.eHP=B.eMax=230+defT.base*110+defT.troops*8;
+    B.pHP=B.pMax=(330+pFac.upArm*40)*1.15;
+    B.eHP=B.eMax=(230+defT.base*110+defT.troops*8)*1.15;
   }else{
-    B.pHP=B.pMax=260+defT.base*110+defT.troops*8;
-    B.eHP=B.eMax=300+eFac.upArm*40;
+    B.pHP=B.pMax=(260+defT.base*110+defT.troops*8)*1.15;
+    B.eHP=B.eMax=(300+eFac.upArm*40)*1.15;
     B.S["-1"].income*=1.1;
   }
   arrowFX(from,to);
@@ -127,7 +129,9 @@ function spawnUnit(side,kind){
   if(f.heroes[0]==="suntzu"&&P.champAlive)cost=Math.round(cost*0.9); // Sun Tzu: -10% costo mientras vive
   if(B.over||P.gold<cost||P.cool[kind]>0)return;
   P.gold-=cost;P.cool[kind]=st.cd;SFX.spawn();
-  B.units.push(mkUnit(+side,kind,f.era,f.upArm));
+  const u=mkUnit(+side,kind,f.era,f.upArm);
+  if(B.pacing.desgaste){u.hp*=0.9;u.max*=0.9;} // desgaste (180s): refuerzos con -10% PV máx
+  B.units.push(u);
 }
 function spawnChamp(side){
   const P=B.S[side],f=F[P.fac];
@@ -220,7 +224,7 @@ function useSpecial(side){
   if(side==="1"&&humans.length===1)completeMission("spec");
   const dmg=55*(f.era+1),foe=-(+side);
   for(const u of B.units)if(u.side===foe){
-    const dm=dmg*dmgTakenMult(u);u.hp-=dm;u.flash=0.2;
+    const dm=dmg*dmgTakenMult(u);u.hp-=dm;u.flash=0.2;P.dmgDealt+=dm;
     B.dmgs.push({x:u.x,y:GROUND-50,txt:Math.round(dm),t:0.7,c:"#FFD866"});}
   B.shake=SET.fx?14:0;B.freeze=0.08;SFX.boom();
   if(side==="-1")B.dmgs.push({x:W/2,y:GROUND-140,txt:"⚠️ ¡"+SPECIALS[f.era]+" enemigo!",t:1.4,c:"#FF7A66"});
@@ -312,7 +316,23 @@ function bloop(now){
   if(B.freeze>0){B.freeze-=dt;dt=0;} // hitstop
   if(!B.over&&dt>0){
     B.time+=dt;
-    if(B.time>150){B.S["1"].income=18;B.S["-1"].income=Math.max(B.S["-1"].income,18);} // muerte súbita
+    // Desgaste progresivo (Fase 2C): umbrales de una sola vez, con banner
+    // narrativo y línea causal en el log.
+    if(!B.pacing.tension&&B.time>=120){
+      B.pacing.tension=true;B.S["1"].income*=1.1;B.S["-1"].income*=1.1;
+      B.dmgs.push({x:W/2,y:GROUND-150,txt:"⚠️ Tensión de guerra: +10% ingreso",t:3,c:"#FFD866"});
+      log("⚠️ Tensión de guerra en la batalla: el ingreso de ambos bandos sube 10%.");
+    }
+    if(!B.pacing.muerteSubita&&B.time>=150){
+      B.pacing.muerteSubita=true;
+      B.dmgs.push({x:W/2,y:GROUND-150,txt:"💀 Muerte súbita: bases +20% daño recibido",t:3,c:"#C63D2F"});
+      log("💀 Muerte súbita: las bases reciben 20% más de daño desde ahora.","loss");
+    }
+    if(!B.pacing.desgaste&&B.time>=180){
+      B.pacing.desgaste=true;
+      B.dmgs.push({x:W/2,y:GROUND-150,txt:"📉 Desgaste: refuerzos con -10% PV",t:3,c:"#9FB3BE"});
+      log("📉 Las líneas de suministro se agotan: los refuerzos llegan con -10% PV máximo.");
+    }
     for(const sd of["1","-1"]){
       const P=B.S[sd];P.gold+=P.income*dt;
       for(const k in P.cool)P.cool[k]=Math.max(0,P.cool[k]-dt);
@@ -367,6 +387,7 @@ function bloop(now){
           const mult=counterMult(u,tgt);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
           tgt.hp-=dm;tgt.flash=0.15;SFX.hit();
+          B.S[String(u.side)].dmgDealt+=dm;
           B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:Math.round(dm),t:0.6,
             c:mult>1?"#FFD866":(mult<1?"#9FB3BE":"#F4E9C8")});
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:tgt.x,ty:GROUND-16,t:0.2});
@@ -401,8 +422,11 @@ function bloop(now){
         }
       }else if(!tgt&&baseD<=u.rng+18){
         if(u.t<=0){u.t=u.atk;
-          if(u.side===1){B.eHP-=u.dmg*dmgMultOut;if(SET.fx)B.shake=Math.max(B.shake,3);}
-          else{B.pHP-=u.dmg*dmgMultOut;if(SET.fx)B.shake=Math.max(B.shake,3);}
+          const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
+          const dmgToBase=u.dmg*dmgMultOut*baseMult;
+          if(u.side===1){B.eHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
+          else{B.pHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
+          B.S[String(u.side)].dmgDealt+=dmgToBase;
           SFX.hit();
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2});}
       }else{
@@ -423,6 +447,20 @@ function bloop(now){
     B.shake=Math.max(0,B.shake-dt*30);
     if(B.eHP<=0)finishBattle(true);
     else if(B.pHP<=0)finishBattle(false);
+    else if(!B.pacing.resuelto&&B.time>=210){
+      // Resolución forzada (210s): gana quien tenga mayor
+      // PVbase%*2 + tropas vivas + dañoCausado/100. Ninguno de los dos
+      // términos toca directamente la vida del otro: es un desempate,
+      // no un golpe más.
+      B.pacing.resuelto=true;
+      const score=sd=>{
+        const frac=Math.max(0,sd==="1"?B.pHP/B.pMax:B.eHP/B.eMax);
+        const tropas=B.units.filter(u=>u.side===(sd==="1"?1:-1)&&u.hp>0).length;
+        return frac*100*2+tropas+B.S[sd].dmgDealt/100;
+      };
+      log(`⏱ Resolución forzada tras 210s de batalla (PV ${Math.round(B.pHP/B.pMax*100)}% vs ${Math.round(B.eHP/B.eMax*100)}%).`);
+      finishBattle(score("1")>=score("-1"));
+    }
   }
   drawBattle();
   $("bhpP").firstElementChild.style.width=Math.max(0,B.pHP/B.pMax*100)+"%";
