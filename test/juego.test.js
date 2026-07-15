@@ -679,12 +679,24 @@ test("Coalición anti-líder: activa según fórmula y expira a cinco rondas", a
     g.win.eval('F.AG.gold=10000; F.AG.science=1000; ownedBy("AG").forEach(id=>{T[id].troops=99;T[id].base=3;});');
     assert.strictEqual(g.win.eval('coalitionChance(0.25)'),0);
     assert.strictEqual(g.win.eval('coalitionChance(2)'),0.75,"la probabilidad debe respetar el techo de 75%");
-    g.win.eval('for(const f of alive())if(f!=="AG")relAdd(f,"AG",-100); updateCoalition();');
+    g.win.eval('for(const f of alive())if(f!=="AG")relAdd(f,"AG",-100);');
+    const estadoAntes=g.win.eval(`JSON.stringify({
+      fac:Object.fromEntries(Object.entries(F).map(([id,f])=>[id,{gold:f.gold,food:f.food,science:f.science,faith:f.faith,culture:f.culture,upArm:f.upArm,upEco:f.upEco,upMed:f.upMed}])),
+      terr:Object.fromEntries(Object.entries(T).map(([id,t])=>[id,{troops:t.troops,base:t.base}]))})`);
+    g.win.eval('updateCoalition(); render();');
     assert.ok(g.win.eval('coalition!==null'),"una amenaza extrema debe poder activar la coalición");
     assert.strictEqual(g.win.eval('coalition.leader'),"AG");
     assert.ok(g.win.eval('coalition.members.length>=2'));
     assert.strictEqual(g.doc.getElementById("worldBanner").style.display,"flex","la activación debe mostrar banner narrativo");
     assert.ok(g.win.eval('pacts.some(p=>p.coalition)'),"los miembros deben pactar automáticamente entre sí");
+    assert.strictEqual(g.win.eval(`JSON.stringify({
+      fac:Object.fromEntries(Object.entries(F).map(([id,f])=>[id,{gold:f.gold,food:f.food,science:f.science,faith:f.faith,culture:f.culture,upArm:f.upArm,upEco:f.upEco,upMed:f.upMed}])),
+      terr:Object.fromEntries(Object.entries(T).map(([id,t])=>[id,{troops:t.troops,base:t.base}]))})`),estadoAntes,
+      "la coalición no debe inflar recursos, tropas, bases ni mejoras de sus miembros");
+    assert.ok(g.win.eval('coalition.members.every(f=>coalitionDesire(f,coalition.leader,leaderThreat().threat)>0.45)'),
+      "cada miembro debe superar estrictamente DeseoUnirse > 0.45");
+    assert.ok(g.doc.getElementById("empInfo").textContent.includes("Coalición en tu contra: 5 rondas"),
+      "el estado de coalición debe permanecer visible en el panel Imperio");
     assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("COALICIÓN"))'),"la coalición debe sumarse al Resumen");
     g.win.eval('coalition.rounds=1; updateCoalition();');
     assert.strictEqual(g.win.eval('coalition'),null,"la coalición debe expirar al completar cinco rondas");
@@ -732,6 +744,21 @@ test("Pesadilla y aleatoriedad viva: desbloqueo, doble ataque, clamp y anti-repe
     g.win.eval('eventHistory=[];');
     const unpunished=g.win.eval('liveEventProbability(0.30,"nuevo","SB")');
     assert.ok(punished<unpunished,"dos eventos negativos recientes deben activar AntiCastigo x0.5");
+
+    // Simetría: AG es ahora el líder. El mismo cálculo debe aplicar ×1.2
+    // cuando el objetivo es el jugador, y AntiCastigo tanto a AG como a CO.
+    g.win.eval('F.AG.gold=20000; for(const f of alive())if(f!=="AG")F[f].gold=0; eventHistory=[]; warHistory=[];');
+    assert.strictEqual(g.win.eval('leaderThreat().leader'),"AG");
+    const pLider=g.win.eval('liveEventProbability(0.12,"simetria","AG")');
+    const pNoLider=g.win.eval('liveEventProbability(0.12,"simetria","CO")');
+    assert.ok(pLider>pNoLider,"el ×1.2 debe golpear al jugador cuando el jugador es líder");
+    for(const objetivo of ["AG","CO"]){
+      g.win.eval('eventHistory=[]');
+      const limpio=g.win.eval(`liveEventProbability(0.30,"sim-${objetivo}","${objetivo}")`);
+      g.win.eval(`recordLiveEvent("neg1","${objetivo}",true);recordLiveEvent("neg2","${objetivo}",true);`);
+      const protegido=g.win.eval(`liveEventProbability(0.30,"sim-${objetivo}","${objetivo}")`);
+      assert.ok(protegido<limpio,`AntiCastigo debe proteger por igual al objetivo ${objetivo}`);
+    }
   }finally{closeGame(g);}
 });
 
