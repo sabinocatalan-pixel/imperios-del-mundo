@@ -1033,6 +1033,57 @@ test("Monstruos 3B-3: marcador, halo, ruta y selección accesible", async () => 
   }finally{closeGame(g);}
 });
 
+/* 30 (Fase 3B-4). Saqueo programado cada dos rondas con límites,
+   persistencia, explicación causal y propietario dinámico. */
+test("Monstruos 3B-4: saqueo causal, límites y persistencia", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");monsterState.active=createMonsterState("kraken","CAN",6,0);T.CAN.pop=10;F.AG.gold=40;round=7;');
+    assert.strictEqual(g.win.eval('applyMonsterRaid(monsterState,round)'),null,"no saquea antes de nextRaidRound");
+    assert.strictEqual(g.win.eval('T.CAN.pop'),10);assert.strictEqual(g.win.eval('F.AG.gold'),40);
+    assert.strictEqual(g.win.eval('JSON.stringify(getMonsterRaidEffect("kraken"))'),JSON.stringify({population:2,gold:10}));
+    assert.strictEqual(g.win.eval('JSON.stringify(getMonsterRaidEffect("amaru"))'),JSON.stringify({population:2,gold:8}));
+    assert.strictEqual(g.win.eval('JSON.stringify(getMonsterRaidEffect("long"))'),JSON.stringify({population:1,gold:12}));
+    assert.strictEqual(g.win.eval('JSON.stringify(getMonsterRaidEffect("anubis"))'),JSON.stringify({population:2,gold:10}));
+
+    g.win.eval('round=8;document.getElementById("worldBanner").style.display="none";selected="CAN";');
+    const activeBefore=g.win.eval('monsterState.active');
+    const raid=g.win.eval('applyMonsterRaid(monsterState,round)');
+    assert.deepStrictEqual({population:raid.populationLost,gold:raid.goldLost},{population:2,gold:10});
+    assert.strictEqual(g.win.eval('T.CAN.pop'),8);assert.strictEqual(g.win.eval('F.AG.gold'),30);
+    assert.strictEqual(g.win.eval('monsterState.active'),activeBefore,"el saqueo no elimina ni duplica el objeto activo");
+    assert.strictEqual(g.win.eval('monsterState.active.raidCount'),1);
+    assert.strictEqual(g.win.eval('monsterState.active.nextRaidRound'),10);
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Kraken saqueó Canadá"))'),"el Resumen explica el saqueo");
+    assert.strictEqual(g.doc.getElementById("worldBanner").style.display,"flex","muestra banner si está libre");
+    g.win.eval('render()');
+    assert.ok(g.doc.querySelector(".mythicThreatHalo.raided"),"el mapa marca el territorio saqueado");
+    assert.ok(g.doc.getElementById("terrInfo").textContent.includes("Próximo saqueo: 2 rondas"),"el panel muestra próxima ronda");
+    assert.ok(g.doc.getElementById("terrInfo").textContent.includes("Daño acumulado: −2 población · −10 oro"),"el panel muestra pérdidas reales");
+    assert.ok([...g.doc.querySelectorAll("#terrBtns button")].some(b=>b.textContent.includes("próximo bloque")&&b.disabled),"Desafiar sigue bloqueado");
+
+    g.win.eval('T.CAN.owner="CO";T.CAN.pop=2;F.CO.gold=5;round=10;document.getElementById("worldBanner").style.display="none";');
+    const second=g.win.eval('applyMonsterRaid(monsterState,round)');
+    assert.strictEqual(second.owner,"CO","cambiar propietario no elimina la amenaza");
+    assert.strictEqual(g.win.eval('T.CAN.pop'),2,"población nunca baja de dos");
+    assert.strictEqual(g.win.eval('F.CO.gold'),0,"oro nunca baja de cero");
+    assert.strictEqual(g.win.eval('monsterState.active.raidCount'),2);
+    assert.strictEqual(g.win.eval('monsterState.active.nextRaidRound'),12);
+    assert.strictEqual(g.win.eval('monsterState.active.id'),"kraken");
+
+    const code=g.win.eval('saveGame()');
+    g.win.eval('monsterState=emptyMonsterState();loadGame('+JSON.stringify(code)+')');
+    assert.strictEqual(g.win.eval('monsterState.active.raidCount'),2,"save conserva raidCount");
+    assert.strictEqual(g.win.eval('monsterState.active.nextRaidRound'),12,"save conserva nextRaidRound");
+    g.win.eval('monsterState.active=null;T.CAN.pop=7;F.CO.gold=7;');
+    assert.strictEqual(g.win.eval('applyMonsterRaid(monsterState,20)'),null,"sin activo no ocurre nada");
+    assert.strictEqual(g.win.eval('T.CAN.pop'),7);assert.strictEqual(g.win.eval('F.CO.gold'),7);
+    g.win.eval('monsterState.active=createMonsterState("kraken","CAN",18,0);T.CAN.owner="INVALIDO";');
+    assert.doesNotThrow(()=>g.win.eval('applyMonsterRaid(monsterState,20)'),"un propietario inválido no rompe el turno");
+    assert.strictEqual(g.win.eval('monsterState.active.nextRaidRound'),22,"la amenaza inválida se reprograma de forma segura");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

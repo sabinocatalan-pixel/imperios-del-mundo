@@ -30,7 +30,8 @@ function renderTerr(){
   let h=`<div class="row"><span><b>${d.n}</b> — ${FACTIONS[t.owner].name}</span></div>
     <div class="row"><span>⚔ Tropas: ${t.troops}</span><span>👥 Población: ${t.pop}</span></div>
     <div class="row"><span>🏰 Base nv${t.base}</span><span>Recurso: ${RESICON[d.res]} ${d.res}</span></div>
-    <div class="row"><span>☣ ${t.plague>0?"Plaga ("+t.plague+")":"Sin enfermedad"}</span></div>`;
+    <div class="row"><span>☣ ${t.plague>0?"Plaga ("+t.plague+")":"Sin enfermedad"}</span></div>
+    ${getMonsterTerritoryPanelHtml(selected)}`;
   if(!mine&&player&&t.owner!==player){
     const fid=t.owner,r=relGet(player,fid),p=pactBetween(player,fid);
     const pct=(r+100)/2;
@@ -41,6 +42,8 @@ function renderTerr(){
   info.innerHTML=h;
   if(phase!=="play")return;
   const f=F[player];
+  if(monsterState.active&&monsterState.active.territory===selected)
+    btns.appendChild(mkBtn("⚔ Desafiar · próximo bloque",()=>{},true,"danger"));
   if(mine){
     const rec=mkBtn(`Reclutar +4 (12🪙 5🌾)`,()=>{f.gold-=12;f.food-=5;
       t.troops=Math.min(99,t.troops+4);SFX.spawn();log(`Reclutaste tropas en ${d.n}.`);render();},

@@ -90,7 +90,8 @@ function createMonsterState(monsterId,territoryId,spawnRound,eraMedian){
   const maxHp=Math.round(monster.baseHp*(1+era*0.12));
   return{id:monster.id,territory:territoryId,hp:maxHp,maxHp,
     damage:+(monster.baseDamage*(1+era*0.10)).toFixed(2),eraMedian:era,
-    spawnedRound:spawnRound,nextRaidRound:spawnRound+2,raidCount:0,attemptsThisRound:{}};
+    spawnedRound:spawnRound,nextRaidRound:spawnRound+2,raidCount:0,
+    raidPopulationLost:0,raidGoldLost:0,attemptsThisRound:{}};
 }
 function getMonsterReward(monsterId,empireId,territoryId,earnedRound){
   const monster=getMonsterById(monsterId);
@@ -105,6 +106,50 @@ function migrateMonsterState(saved){
     defeated:saved.defeated&&typeof saved.defeated==="object"?{...saved.defeated}:{},
     rewards:Array.isArray(saved.rewards)?saved.rewards.map(r=>({...r,inert:true})):[]
   };
+}
+
+const MONSTER_RAID_EFFECTS={
+  kraken:{population:2,gold:10},amaru:{population:2,gold:8},
+  long:{population:1,gold:12},anubis:{population:2,gold:10}
+};
+function getMonsterRaidEffect(monsterId){
+  const effect=MONSTER_RAID_EFFECTS[monsterId];return effect?{...effect}:null;
+}
+function shouldRaidMonster(activeMonster,currentRound){
+  return !!(activeMonster&&Number.isFinite(activeMonster.nextRaidRound)&&currentRound>=activeMonster.nextRaidRound);
+}
+function applyMonsterRaid(state,currentRound){
+  const active=state&&state.active;if(!shouldRaidMonster(active,currentRound))return null;
+  const effect=getMonsterRaidEffect(active.id),territory=T[active.territory];
+  if(!effect||!territory||!F[territory.owner]){
+    active.nextRaidRound=currentRound+2;return null;
+  }
+  const owner=territory.owner,popBefore=territory.pop,goldBefore=F[owner].gold;
+  territory.pop=Math.max(2,territory.pop-effect.population);
+  F[owner].gold=Math.max(0,F[owner].gold-effect.gold);
+  const populationLost=popBefore-territory.pop,goldLost=goldBefore-F[owner].gold;
+  active.raidCount=(active.raidCount||0)+1;
+  active.raidPopulationLost=(active.raidPopulationLost||0)+populationLost;
+  active.raidGoldLost=(active.raidGoldLost||0)+goldLost;
+  active.nextRaidRound=currentRound+2;
+  const monster=getMonsterById(active.id);
+  const message=`${monster.icon} ${monster.name} saqueó ${TERR[active.territory].n}: −${populationLost} población y −${goldLost} oro para ${fname(owner)}.`;
+  logCausal(message,"loss");
+  const banner=$("worldBanner");
+  if(!banner||banner.style.display!=="flex")showWorldBanner("▾ SAQUEO MÍTICO",message);
+  return{monsterId:active.id,territory:active.territory,owner,populationLost,goldLost};
+}
+
+function getMonsterTerritoryPanelHtml(territoryId){
+  const active=monsterState&&monsterState.active;
+  if(!active||active.territory!==territoryId)return"";
+  const monster=getMonsterById(active.id),remaining=Math.max(0,active.nextRaidRound-round);
+  return`<div class="mythicTerritoryInfo">
+    <div class="row"><b>${monster.icon} ${monster.name} · Amenaza mítica</b></div>
+    <div class="row"><span>PV: ${Math.round(active.hp)}/${Math.round(active.maxHp)}</span><span>Próximo saqueo: ${remaining} ${remaining===1?"ronda":"rondas"}</span></div>
+    ${active.raidCount?`<div class="row"><span>▾ Saqueos: ${active.raidCount}</span><span>Daño acumulado: −${active.raidPopulationLost||0} población · −${active.raidGoldLost||0} oro</span></div>`:""}
+    <div class="row mythicCause">Permanece aquí porque las condiciones cambiantes del mundo atrajeron esta amenaza.</div>
+  </div>`;
 }
 
 /* Render mínimo 3B-3. No ejecuta saqueo, combate, patrones ni recompensas. */
@@ -138,7 +183,9 @@ function renderMythicThreat(){
   legend.hidden=!active;if(!active||!TERR[active.territory])return;
   const monster=getMonsterById(active.id);if(!monster)return;
   const points=TERR[active.territory].p,pos=monsterMarkerPosition(active);
-  territoryLayer.innerHTML=`<polygon class="mythicThreatHalo" points="${points}"/>`;
+  const raided=active.raidCount>0;
+  territoryLayer.innerHTML=`<polygon class="mythicThreatHalo${raided?" raided":""}" points="${points}"/>
+    ${raided?`<text class="mythicRaidMarks" x="${TERR[active.territory].c[0]}" y="${TERR[active.territory].c[1]+30}">▾▾</text>`:""}`;
   if(pos.route){
     const a=TERR[pos.route[0]].c,b=TERR[pos.route[1]].c;
     routeLayer.innerHTML=`<path class="mythicThreatRoute" d="M${a[0]},${a[1]} Q${(a[0]+b[0])/2},${(a[1]+b[1])/2-30} ${b[0]},${b[1]}"/>`;
