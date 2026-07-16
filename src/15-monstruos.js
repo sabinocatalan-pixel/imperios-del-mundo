@@ -47,6 +47,38 @@ function getAvailableMonsters(state){
   if(s.active)return[];
   return Object.values(MONSTERS).filter(m=>!(s.defeated&&s.defeated[m.id]));
 }
+function getValidMonsterTargets(monsterId,state){
+  const s=state||emptyMonsterState();
+  if(s.active||s.defeated&&s.defeated[monsterId])return[];
+  const monster=getMonsterById(monsterId);if(!monster)return[];
+  return monster.zone.territories.filter(id=>T[id]&&isValidMonsterTerritory(monsterId,id));
+}
+function pickMonsterCandidate(state,rng=Math.random){
+  const available=getAvailableMonsters(state).map(monster=>({monster,targets:getValidMonsterTargets(monster.id,state)}))
+    .filter(x=>x.targets.length);
+  if(!available.length)return null;
+  const roll=Math.max(0,Math.min(0.999999,+rng()||0)),scaled=roll*available.length;
+  const entry=available[Math.floor(scaled)],fraction=scaled-Math.floor(scaled);
+  return{monster:entry.monster,territory:entry.targets[Math.floor(fraction*entry.targets.length)]};
+}
+function medianAliveEra(){
+  const eras=alive().map(fid=>F[fid].era||0).sort((a,b)=>a-b);if(!eras.length)return 0;
+  const mid=Math.floor(eras.length/2);return eras.length%2?eras[mid]:(eras[mid-1]+eras[mid])/2;
+}
+function trySpawnMonster(state,currentRound,rng=Math.random){
+  if(!state||state.active||currentRound<6)return null;
+  const candidate=pickMonsterCandidate(state,rng);if(!candidate)return null;
+  const {monster,territory}=candidate,owner=T[territory].owner,eventKey=`monstruo:${monster.id}`;
+  if(rng()>=liveEventProbability(0.07,eventKey,owner))return null;
+  const active=createMonsterState(monster.id,territory,currentRound,medianAliveEra());
+  if(!active)return null;
+  state.active=active;recordLiveEvent(eventKey,owner,true);
+  const message=`${monster.icon} ${monster.name} apareció en ${TERR[territory].n}: las condiciones cambiantes del mundo atrajeron una amenaza mítica.`;
+  logCausal(message,"loss");
+  const banner=$("worldBanner");
+  if(!banner||banner.style.display!=="flex")showWorldBanner("⚠ AMENAZA MÍTICA",message);
+  return active;
+}
 function isValidMonsterTerritory(monsterId,territoryId){
   const monster=getMonsterById(monsterId);
   return !!(monster&&TERR[territoryId]&&monster.zone.territories.includes(territoryId));

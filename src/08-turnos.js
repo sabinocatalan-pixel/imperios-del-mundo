@@ -6,6 +6,7 @@ function startRound(){
   turnSummaryLines=[]; // nueva ronda: reinicia lo que verá el Resumen del turno
   autoSaveGame();
   incomePhase();
+  trySpawnMonster(monsterState,round);
   updateCoalition();
   if(checkEnd())return;
   checkScenario();if(phase==="over")return;

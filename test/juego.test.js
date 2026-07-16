@@ -963,6 +963,43 @@ test("Monstruos 3B-1: datos, estado neutral y migración v5", async () => {
   }finally{closeGame(g);}
 });
 
+/* 28 (Fase 3B-2). Aparición global desde ronda 6 mediante la fórmula
+   existente de Aleatoriedad Viva, sin saqueo, combate ni render de mapa. */
+test("Monstruos 3B-2: aparición por Aleatoriedad Viva y límite global", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");Math.random=()=>0;');
+    assert.strictEqual(g.win.eval('trySpawnMonster(monsterState,5,()=>0)'),null,"no aparecen antes de ronda 6");
+    assert.strictEqual(g.win.eval('monsterState.active'),null);
+
+    g.win.eval('round=6;eventHistory=[];monsterState.defeated={kraken:true,amaru:true,long:true};startRound();');
+    const spawned=g.win.eval('monsterState.active');
+    assert.strictEqual(spawned.id,"anubis","solo puede elegir un tipo no derrotado");
+    assert.ok(g.win.eval('isValidMonsterTerritory(monsterState.active.id,monsterState.active.territory)'),"debe elegir un territorio válido");
+    assert.strictEqual(spawned.nextRaidRound,8,"prepara el saqueo para dos rondas después");
+    assert.ok(g.win.eval('eventHistory.some(e=>e.type==="monstruo:anubis"&&e.negative)'),"registra el evento vivo con su clave");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Anubis")&&x.m.includes("amenaza mítica"))'),"agrega explicación causal al Resumen");
+    assert.strictEqual(g.doc.getElementById("worldBanner").style.display,"flex","la aparición muestra banner narrativo cuando está libre");
+    const first=JSON.stringify(spawned);
+    assert.strictEqual(g.win.eval('trySpawnMonster(monsterState,7,()=>0)'),null,"no admite más de un monstruo activo");
+    assert.strictEqual(JSON.stringify(g.win.eval('monsterState.active')),first,"el activo existente no debe reemplazarse");
+
+    const code=g.win.eval('saveGame()');
+    g.win.eval('monsterState=emptyMonsterState();loadGame('+JSON.stringify(code)+')');
+    const restored=g.win.eval('monsterState.active');
+    for(const key of["id","territory","hp","maxHp","nextRaidRound"])
+      assert.strictEqual(restored[key],spawned[key],`save debe conservar ${key}`);
+
+    g.win.eval('monsterState=emptyMonsterState();monsterState.defeated={kraken:true,amaru:true,long:true,anubis:true};');
+    assert.strictEqual(g.win.eval('trySpawnMonster(monsterState,8,()=>0)'),null,"si todos fueron derrotados no aparece ninguno");
+
+    g.win.eval(`monsterState=emptyMonsterState();monsterState.defeated={kraken:true,amaru:true,long:true};
+      delete T.MAG;delete T.AFO;delete T.AFE;delete T.SUD;`);
+    assert.doesNotThrow(()=>g.win.eval('trySpawnMonster(monsterState,8,()=>0)'),"sin objetivos válidos no rompe la ronda");
+    assert.strictEqual(g.win.eval('monsterState.active'),null);
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
