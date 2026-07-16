@@ -1000,6 +1000,39 @@ test("Monstruos 3B-2: aparición por Aleatoriedad Viva y límite global", async 
   }finally{closeGame(g);}
 });
 
+/* 29 (Fase 3B-3). El mapa comunica una amenaza activa mediante capas,
+   halo, marcador accesible, PV, ruta del Kraken y leyenda plegable. */
+test("Monstruos 3B-3: marcador, halo, ruta y selección accesible", async () => {
+  const g=makeGame();
+  try{
+    assert.ok(g.doc.getElementById("mythicRouteLayer"));
+    assert.ok(g.doc.getElementById("mythicTerritoryLayer"));
+    assert.ok(g.doc.getElementById("mythicMarkerLayer"));
+    assert.strictEqual(g.doc.getElementById("mythicMarkerLayer").children.length,0,"sin activo no hay marcador");
+    assert.strictEqual(g.doc.getElementById("mythicLegend").hidden,true,"sin activo la leyenda permanece oculta");
+
+    g.win.eval('monsterState.active=createMonsterState("kraken","CAN",6,1);monsterState.active.hp=monsterState.active.maxHp/2;render();');
+    const marker=g.doc.getElementById("mythicMonsterMarker");
+    assert.ok(marker,"con activo aparece el marcador protagonista");
+    assert.ok(g.doc.querySelector("#mythicTerritoryLayer .mythicThreatHalo"),"aparece halo territorial");
+    assert.ok(g.doc.querySelector("#mythicRouteLayer .mythicThreatRoute"),"Kraken resalta una ruta marítima válida");
+    assert.strictEqual(g.doc.getElementById("mythicLegend").hidden,false,"la leyenda aparece solo con amenaza");
+    assert.ok(marker.getAttribute("aria-label").includes("Kraken"),"el marcador tiene nombre accesible");
+    assert.ok(marker.querySelector("title").textContent.includes("PV"),"el marcador ofrece detalle textual de PV");
+    assert.ok(Math.abs(+marker.querySelector(".mythicHpFill").getAttribute("width")-21)<0.01,"la barra refleja 50% de PV");
+    assert.strictEqual(marker.querySelector(".mythicHitbox").getAttribute("r"),"22","hitbox base de 44x44 px");
+    marker.dispatchEvent(new g.win.MouseEvent("click",{bubbles:true}));
+    assert.strictEqual(g.win.eval('selected'),"CAN","tocar el marcador selecciona el territorio asociado");
+    assert.ok(g.doc.getElementById("terrInfo").textContent.includes("Canadá"),"la selección actualiza el panel territorial normal");
+
+    g.win.eval('monsterState.active=null;render();');
+    assert.strictEqual(g.doc.getElementById("mythicMarkerLayer").children.length,0);
+    assert.strictEqual(g.doc.getElementById("mythicLegend").hidden,true);
+    g.win.eval('clickTerr("CAN")');
+    assert.strictEqual(g.win.eval('selected'),"CAN","la selección normal del mapa sigue funcionando");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

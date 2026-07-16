@@ -44,6 +44,27 @@
   .ttroop{font-size:14px;fill:#fff;text-anchor:middle;pointer-events:none;font-weight:700;
     paint-order:stroke;stroke:rgba(0,0,0,.8);stroke-width:3px}
   #mapwrap{position:relative}
+  .mythicThreatHalo{fill:rgba(177,95,224,.10);stroke:#D99BFF;stroke-width:5;
+    stroke-dasharray:10 7;pointer-events:none;filter:drop-shadow(0 0 5px rgba(177,95,224,.85))}
+  .mythicThreatRoute{fill:none;stroke:#B15FE0;stroke-width:4;stroke-dasharray:11 7;
+    pointer-events:none;filter:drop-shadow(0 0 4px rgba(217,155,255,.85))}
+  .mythicMonsterMarker{cursor:pointer;outline:none}
+  .mythicHitbox{fill:transparent;pointer-events:all}
+  .mythicPulse{fill:rgba(177,95,224,.18);stroke:#D99BFF;stroke-width:2}
+  .mythicMedallion{fill:#081016;stroke:#D9A441;stroke-width:2.5}
+  .mythicIcon{font-size:22px;text-anchor:middle;pointer-events:none;user-select:none}
+  .mythicHpBack{fill:#081016;stroke:#E8DCC0;stroke-width:1}
+  .mythicHpFill{fill:#B15FE0}
+  .mythicMonsterMarker:focus .mythicMedallion{stroke:#fff;stroke-width:4}
+  .mythicMonsterMarker.fx .mythicPulse{animation:mythicPulse 1.8s ease-in-out infinite}
+  @keyframes mythicPulse{50%{opacity:.35}}
+  #mythicLegend{position:absolute;right:10px;top:8px;z-index:6;text-align:right}
+  #mythicLegendToggle{min-height:44px;border:1px solid #D99BFF;border-radius:8px;background:#081016;
+    color:#E8DCC0;padding:8px 10px;font-size:11px;font-weight:600;font-family:inherit}
+  #mythicLegendBody{margin-top:4px;padding:7px 9px;border:1px solid #6D477C;border-radius:7px;
+    background:rgba(8,16,22,.94);font-size:10.5px;text-align:left;max-width:190px}
+  #mythicLegendBody span{display:block;margin:2px 0}
+  @media(prefers-reduced-motion:reduce){.mythicMonsterMarker.fx .mythicPulse{animation:none}}
   #zoomCtl{position:absolute;left:10px;bottom:10px;display:flex;flex-direction:row;gap:6px;z-index:5}
   #zoomCtl button{width:42px;height:42px;font-size:18px;border-radius:8px;opacity:.85;
     border:1.5px solid var(--line);background:rgba(8,16,22,.7);color:var(--parchment)}

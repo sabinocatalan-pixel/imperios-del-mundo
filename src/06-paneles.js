@@ -10,6 +10,7 @@ function render(){
     poly.classList.toggle("target",!!canT);
     $("tt"+id).textContent=`${FACTIONS[t.owner].emb}⚔${t.troops}${t.base>0?" 🏰"+t.base:""}${t.plague>0?" ☣":""}`;
   }
+  renderMythicThreat();
   renderRes();renderTerr();renderEmp();
 }
 function renderRes(){

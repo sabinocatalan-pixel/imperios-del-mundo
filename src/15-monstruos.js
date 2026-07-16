@@ -106,3 +106,61 @@ function migrateMonsterState(saved){
     rewards:Array.isArray(saved.rewards)?saved.rewards.map(r=>({...r,inert:true})):[]
   };
 }
+
+/* Render mínimo 3B-3. No ejecuta saqueo, combate, patrones ni recompensas. */
+function monsterRouteFor(active){
+  if(!active||active.id!=="kraken")return null;
+  return SEAROUTES.find(route=>route.includes(active.territory))||null;
+}
+function monsterMarkerPosition(active){
+  const route=monsterRouteFor(active);
+  if(route){
+    const a=TERR[route[0]].c,b=TERR[route[1]].c;
+    return{x:(a[0]+b[0])/2,y:(a[1]+b[1])/2-15,route};
+  }
+  const c=TERR[active.territory].c;
+  return{x:c[0]+24,y:c[1]-30,route:null};
+}
+function syncMythicMarkerScale(){
+  const marker=$("mythicMonsterMarker");if(!marker||typeof vb==="undefined")return;
+  const pxWidth=svg.clientWidth||1000,scale=vb.w/pxWidth;
+  marker.setAttribute("transform",`translate(${marker.dataset.x} ${marker.dataset.y}) scale(${scale})`);
+}
+function selectMonsterTerritory(){
+  if(!monsterState.active||!T[monsterState.active.territory])return;
+  selected=monsterState.active.territory;SFX.click();render();
+}
+function renderMythicThreat(){
+  const routeLayer=$("mythicRouteLayer"),territoryLayer=$("mythicTerritoryLayer"),markerLayer=$("mythicMarkerLayer");
+  const legend=$("mythicLegend");if(!routeLayer||!territoryLayer||!markerLayer||!legend)return;
+  routeLayer.innerHTML="";territoryLayer.innerHTML="";markerLayer.innerHTML="";
+  const active=monsterState&&monsterState.active;
+  legend.hidden=!active;if(!active||!TERR[active.territory])return;
+  const monster=getMonsterById(active.id);if(!monster)return;
+  const points=TERR[active.territory].p,pos=monsterMarkerPosition(active);
+  territoryLayer.innerHTML=`<polygon class="mythicThreatHalo" points="${points}"/>`;
+  if(pos.route){
+    const a=TERR[pos.route[0]].c,b=TERR[pos.route[1]].c;
+    routeLayer.innerHTML=`<path class="mythicThreatRoute" d="M${a[0]},${a[1]} Q${(a[0]+b[0])/2},${(a[1]+b[1])/2-30} ${b[0]},${b[1]}"/>`;
+  }
+  const hpPct=Math.max(0,Math.min(1,active.maxHp?active.hp/active.maxHp:0)),barWidth=42*hpPct;
+  markerLayer.innerHTML=`<g id="mythicMonsterMarker" class="mythicMonsterMarker${SET.fx?" fx":""}"
+      data-x="${pos.x}" data-y="${pos.y}" role="button" tabindex="0"
+      aria-label="${monster.name}, amenaza mítica en ${TERR[active.territory].n}, ${Math.round(hpPct*100)}% de vida">
+      <title>${monster.name} — ${Math.round(active.hp)}/${Math.round(active.maxHp)} PV</title>
+      <circle class="mythicHitbox" r="22"/>
+      <circle class="mythicPulse" r="21"/>
+      <circle class="mythicMedallion" r="18"/>
+      <text class="mythicIcon" y="6">${monster.icon}</text>
+      <rect class="mythicHpBack" x="-22" y="22" width="44" height="6" rx="3"/>
+      <rect class="mythicHpFill" x="-21" y="23" width="${barWidth}" height="4" rx="2"/>
+    </g>`;
+  const marker=$("mythicMonsterMarker");
+  marker.addEventListener("click",e=>{e.stopPropagation();if(!mapDragged)selectMonsterTerritory();});
+  marker.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectMonsterTerritory();}});
+  syncMythicMarkerScale();
+}
+function initMythicMapUI(){
+  const toggle=$("mythicLegendToggle"),body=$("mythicLegendBody");if(!toggle||!body)return;
+  toggle.onclick=()=>{const open=body.hidden;body.hidden=!open;toggle.setAttribute("aria-expanded",String(open));};
+}

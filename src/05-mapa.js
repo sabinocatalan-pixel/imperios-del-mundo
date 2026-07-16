@@ -28,12 +28,15 @@ function buildMap(){
     h+=`<path d="M${c1[0]},${c1[1]} Q${(c1[0]+c2[0])/2},${(c1[1]+c2[1])/2-30} ${c2[0]},${c2[1]}"
       fill="none" stroke="#2A4A57" stroke-width="1.5" stroke-dasharray="4 6" opacity=".65"/>`;
   }
+  h+=`<g id="mythicRouteLayer" aria-hidden="true"></g>`;
   for(const id in TERR)h+=`<polygon class="terr" id="p${id}" data-id="${id}" points="${TERR[id].p}" filter="url(#fshadow)"/>`;
+  h+=`<g id="mythicTerritoryLayer" aria-hidden="true"></g>`;
   for(const id in TERR){
     const t=TERR[id];
     h+=`<text class="tlabel" x="${t.c[0]}" y="${t.c[1]-6}">${t.n}</text>
         <text class="ttroop" id="tt${id}" x="${t.c[0]}" y="${t.c[1]+9}"></text>`;
   }
+  h+=`<g id="mythicMarkerLayer"></g>`;
   svg.innerHTML=h;
   document.querySelectorAll(".terr").forEach(p=>p.addEventListener("click",()=>{
     if(mapDragged)return; // no seleccionar si fue un arrastre
@@ -43,7 +46,7 @@ function buildMap(){
 
 /* ==================== ZOOM Y PANEO DEL MAPA ==================== */
 let vb={x:0,y:0,w:1000,h:520},mapDragged=false;
-function applyVB(){svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);}
+function applyVB(){svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);syncMythicMarkerScale();}
 function zoomMap(f,cx=null,cy=null){ // f>1 acerca
   const nw=Math.max(280,Math.min(1000,vb.w/f));
   const nh=nw*0.52;
