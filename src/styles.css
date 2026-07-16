@@ -52,6 +52,8 @@
   .mythicRaidMarks{font-size:20px;font-weight:900;fill:#FF8A74;text-anchor:middle;pointer-events:none}
   .mythicTerritoryInfo{margin-top:7px;padding:7px;border:1px solid #6D477C;border-radius:6px;background:rgba(177,95,224,.08)}
   .mythicCause{opacity:.78;font-size:11px}
+  .mythicRequirements{margin-top:6px;padding-top:5px;border-top:1px solid #6D477C;font-size:11px}
+  .mythicRequirements span{display:block;margin-top:3px}
   .mythicMonsterMarker{cursor:pointer;outline:none}
   .mythicHitbox{fill:transparent;pointer-events:all}
   .mythicPulse{fill:rgba(177,95,224,.18);stroke:#D99BFF;stroke-width:2}

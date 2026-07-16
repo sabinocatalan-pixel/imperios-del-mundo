@@ -6,6 +6,7 @@ function startRound(){
   turnSummaryLines=[]; // nueva ronda: reinicia lo que verá el Resumen del turno
   autoSaveGame();
   incomePhase();
+  resetMonsterAttemptsForRound(monsterState,round);
   applyMonsterRaid(monsterState,round);
   trySpawnMonster(monsterState,round);
   updateCoalition();

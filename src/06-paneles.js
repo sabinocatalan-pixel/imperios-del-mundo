@@ -42,8 +42,11 @@ function renderTerr(){
   info.innerHTML=h;
   if(phase!=="play")return;
   const f=F[player];
-  if(monsterState.active&&monsterState.active.territory===selected)
-    btns.appendChild(mkBtn("⚔ Desafiar · próximo bloque",()=>{},true,"danger"));
+  if(monsterState.active&&monsterState.active.territory===selected){
+    const challenge=canChallengeMonster(monsterState,player,round);
+    btns.appendChild(mkBtn(challenge.ok?"⚔ Desafiar":`⚔ Desafiar · ${challenge.reason}`,
+      ()=>prepareMonsterChallenge(player),!challenge.ok,"danger"));
+  }
   if(mine){
     const rec=mkBtn(`Reclutar +4 (12🪙 5🌾)`,()=>{f.gold-=12;f.food-=5;
       t.troops=Math.min(99,t.troops+4);SFX.spawn();log(`Reclutaste tropas en ${d.n}.`);render();},

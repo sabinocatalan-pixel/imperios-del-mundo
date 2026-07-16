@@ -144,12 +144,60 @@ function getMonsterTerritoryPanelHtml(territoryId){
   const active=monsterState&&monsterState.active;
   if(!active||active.territory!==territoryId)return"";
   const monster=getMonsterById(active.id),remaining=Math.max(0,active.nextRaidRound-round);
+  const challenge=player?canChallengeMonster(monsterState,player,round):{ok:false,origins:[],reason:"Elige un imperio."};
+  const best=challenge.origin;
   return`<div class="mythicTerritoryInfo">
     <div class="row"><b>${monster.icon} ${monster.name} · Amenaza mítica</b></div>
     <div class="row"><span>PV: ${Math.round(active.hp)}/${Math.round(active.maxHp)}</span><span>Próximo saqueo: ${remaining} ${remaining===1?"ronda":"rondas"}</span></div>
     ${active.raidCount?`<div class="row"><span>▾ Saqueos: ${active.raidCount}</span><span>Daño acumulado: −${active.raidPopulationLost||0} población · −${active.raidGoldLost||0} oro</span></div>`:""}
     <div class="row mythicCause">Permanece aquí porque las condiciones cambiantes del mundo atrajeron esta amenaza.</div>
+    <div class="mythicRequirements"><b>Requisitos para desafiar</b>
+      <span>${challenge.origins.length?"✅":"⬜"} Territorio propio conectado</span>
+      <span>${best&&best.troops>=8?"✅":"⬜"} Origen con al menos 8 tropas</span>
+      <span>${challenge.attempted?"⬜ Ya intentaste esta ronda":"✅ Sin intento esta ronda"}</span>
+      ${best?`<span>Origen sugerido: ${TERR[best.id].n} · ${best.troops} tropas · ${best.connection}</span>`:`<span>${challenge.reason}</span>`}
+    </div>
   </div>`;
+}
+
+function getMonsterChallengeOrigins(state,empireId){
+  const active=state&&state.active;if(!active||!F[empireId]||!T[active.territory])return[];
+  const target=active.territory;
+  return ownedBy(empireId).map(id=>{
+    let connection=null;
+    if(id===target)connection="territorio afectado";
+    else if(SEAROUTES.some(route=>route.includes(id)&&route.includes(target)))connection="ruta marítima";
+    else if(ADJ[id]&&ADJ[id].includes(target))connection="adyacencia";
+    return connection?{id,troops:T[id].troops,connection}:null;
+  }).filter(Boolean).sort((a,b)=>b.troops-a.troops||a.id.localeCompare(b.id));
+}
+function canChallengeMonster(state,empireId,currentRound=round){
+  const active=state&&state.active,origins=getMonsterChallengeOrigins(state,empireId);
+  if(!active)return{ok:false,origins,origin:null,attempted:false,reason:"No hay amenaza mítica activa."};
+  const attempted=!!(active.attemptsThisRound&&active.attemptsThisRound[empireId]===currentRound);
+  const origin=origins.find(o=>o.troops>=8)||origins[0]||null;
+  let reason="";
+  if(!origins.length)reason="No controlas un territorio conectado.";
+  else if(!origins.some(o=>o.troops>=8))reason="Necesitas al menos 8 tropas en un origen conectado.";
+  else if(attempted)reason="Ya intentaste cazar este monstruo durante esta ronda.";
+  return{ok:!reason,origins,origin,attempted,reason};
+}
+function markMonsterAttempt(state,empireId,currentRound){
+  const check=canChallengeMonster(state,empireId,currentRound);if(!check.ok)return false;
+  const active=state.active;if(!active.attemptsThisRound)active.attemptsThisRound={};
+  active.attemptsThisRound[empireId]=currentRound;return true;
+}
+function resetMonsterAttemptsForRound(state,currentRound){
+  const attempts=state&&state.active&&state.active.attemptsThisRound;if(!attempts)return;
+  for(const empireId in attempts)if(attempts[empireId]!==currentRound)delete attempts[empireId];
+}
+function prepareMonsterChallenge(empireId){
+  const check=canChallengeMonster(monsterState,empireId,round);if(!check.ok)return false;
+  const active=monsterState.active,monster=getMonsterById(active.id);
+  if(!markMonsterAttempt(monsterState,empireId,round))return false;
+  const message=`${monster.icon} Desafío preparado desde ${TERR[check.origin.id].n}. La batalla de jefe se implementará en el siguiente bloque.`;
+  logCausal(message);showWorldBanner("⚔ DESAFÍO PREPARADO",message);
+  render();return true;
 }
 
 /* Render mínimo 3B-3. No ejecuta saqueo, combate, patrones ni recompensas. */

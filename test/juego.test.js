@@ -1060,7 +1060,7 @@ test("Monstruos 3B-4: saqueo causal, límites y persistencia", async () => {
     assert.ok(g.doc.querySelector(".mythicThreatHalo.raided"),"el mapa marca el territorio saqueado");
     assert.ok(g.doc.getElementById("terrInfo").textContent.includes("Próximo saqueo: 2 rondas"),"el panel muestra próxima ronda");
     assert.ok(g.doc.getElementById("terrInfo").textContent.includes("Daño acumulado: −2 población · −10 oro"),"el panel muestra pérdidas reales");
-    assert.ok([...g.doc.querySelectorAll("#terrBtns button")].some(b=>b.textContent.includes("próximo bloque")&&b.disabled),"Desafiar sigue bloqueado");
+    assert.ok([...g.doc.querySelectorAll("#terrBtns button")].some(b=>b.textContent.includes("Desafiar")),"el panel presenta la acción de desafío");
 
     g.win.eval('T.CAN.owner="CO";T.CAN.pop=2;F.CO.gold=5;round=10;document.getElementById("worldBanner").style.display="none";');
     const second=g.win.eval('applyMonsterRaid(monsterState,round)');
@@ -1081,6 +1081,58 @@ test("Monstruos 3B-4: saqueo causal, límites y persistencia", async () => {
     g.win.eval('monsterState.active=createMonsterState("kraken","CAN",18,0);T.CAN.owner="INVALIDO";');
     assert.doesNotThrow(()=>g.win.eval('applyMonsterRaid(monsterState,20)'),"un propietario inválido no rompe el turno");
     assert.strictEqual(g.win.eval('monsterState.active.nextRaidRound'),22,"la amenaza inválida se reprograma de forma segura");
+  }finally{closeGame(g);}
+});
+
+/* 31 (Fase 3B-5). Requisitos explicables, origen sugerido e intento
+   único por ronda sin abrir todavía una batalla de jefe. */
+test("Monstruos 3B-5: validación y preparación del desafío", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");round=6;selected="CAN";render();');
+    assert.ok(![...g.doc.querySelectorAll("#terrBtns button")].some(b=>b.textContent.includes("Desafiar")),"sin activo no hay botón Desafiar");
+
+    g.win.eval('monsterState.active=createMonsterState("kraken","CAN",6,0);T.CAN.troops=8;render();');
+    let check=g.win.eval('canChallengeMonster(monsterState,"AG",round)');
+    assert.strictEqual(check.ok,true,"el propietario con 8 tropas puede desafiar");
+    assert.strictEqual(check.origin.id,"CAN");
+    assert.ok(g.doc.getElementById("terrInfo").textContent.includes("Requisitos para desafiar"));
+    let challengeBtn=[...g.doc.querySelectorAll("#terrBtns button")].find(b=>b.textContent.includes("Desafiar"));
+    assert.ok(challengeBtn&&!challengeBtn.disabled,"el botón se habilita cuando cumple requisitos");
+
+    g.win.eval('T.CAN.owner="CO";T.CAN.troops=4;T.EUN.owner="AG";T.EUN.troops=9;selected="CAN";render();');
+    check=g.win.eval('canChallengeMonster(monsterState,"AG",round)');
+    assert.strictEqual(check.ok,true,"una conexión marítima con 8 tropas permite desafiar");
+    assert.strictEqual(check.origin.id,"EUN");assert.strictEqual(check.origin.connection,"ruta marítima");
+
+    g.win.eval('monsterState.active=createMonsterState("amaru","PER",6,0);T.PER.owner="SO";T.BRA.owner="AG";T.BRA.troops=10;selected="PER";render();');
+    check=g.win.eval('canChallengeMonster(monsterState,"AG",round)');
+    assert.strictEqual(check.ok,true,"un territorio adyacente puede ser origen");
+    assert.strictEqual(check.origin.id,"BRA");assert.strictEqual(check.origin.connection,"adyacencia");
+
+    g.win.eval('T.BRA.troops=7;render();');
+    check=g.win.eval('canChallengeMonster(monsterState,"AG",round)');
+    assert.strictEqual(check.ok,false);assert.ok(check.reason.includes("8 tropas"));
+    challengeBtn=[...g.doc.querySelectorAll("#terrBtns button")].find(b=>b.textContent.includes("Desafiar"));
+    assert.ok(challengeBtn.disabled,"con menos de 8 tropas queda bloqueado");
+
+    g.win.eval('T.BRA.troops=10;render();');
+    const hpBefore=g.win.eval('monsterState.active.hp'),ownerBefore=g.win.eval('T.PER.owner');
+    challengeBtn=[...g.doc.querySelectorAll("#terrBtns button")].find(b=>b.textContent==="⚔ Desafiar");
+    challengeBtn.click();
+    assert.strictEqual(g.win.eval('inBattle'),false,"preparar no abre batalla todavía");
+    assert.strictEqual(g.win.eval('monsterState.active.hp'),hpBefore,"no cambia PV del jefe");
+    assert.strictEqual(g.win.eval('T.PER.owner'),ownerBefore,"no cambia propietario");
+    assert.strictEqual(g.win.eval('monsterState.active.attemptsThisRound.AG'),6,"registra el intento de la ronda");
+    assert.ok(g.doc.getElementById("worldBannerText").textContent.includes("siguiente bloque"),"explica que el combate aún no está activo");
+    assert.strictEqual(g.win.eval('canChallengeMonster(monsterState,"AG",6).ok'),false,"no permite dos intentos en la misma ronda");
+
+    const code=g.win.eval('saveGame()');
+    g.win.eval('monsterState.active.attemptsThisRound={};loadGame('+JSON.stringify(code)+')');
+    assert.strictEqual(g.win.eval('monsterState.active.attemptsThisRound.AG'),6,"save conserva intentos");
+    g.win.eval('round=7;resetMonsterAttemptsForRound(monsterState,round);');
+    assert.strictEqual(g.win.eval('monsterState.active.attemptsThisRound.AG'),undefined,"al cambiar de ronda libera el intento");
+    assert.strictEqual(g.win.eval('canChallengeMonster(monsterState,"AG",7).ok'),true);
   }finally{closeGame(g);}
 });
 
