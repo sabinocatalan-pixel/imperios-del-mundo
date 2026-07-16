@@ -924,6 +924,45 @@ test("Modo Balance: registra batalla y exporta JSON válido", async () => {
   }finally{closeGame(g);}
 });
 
+/* 27 (Fase 3B-1). Modelo neutral, escalado, recompensa inerte y
+   migración retrocompatible sin tocar el motor de batalla normal. */
+test("Monstruos 3B-1: datos, estado neutral y migración v5", async () => {
+  const g=makeGame();
+  try{
+    assert.strictEqual(g.win.eval('Object.keys(MONSTERS).length'),4,"deben existir exactamente cuatro monstruos");
+    assert.ok(g.win.eval('Object.values(MONSTERS).every(m=>m.patterns.length===2)'),"cada monstruo define exactamente dos patrones");
+    assert.strictEqual(g.win.eval('JSON.stringify(monsterState)'),JSON.stringify({active:null,defeated:{},rewards:[]}),"el estado neutral empieza vacío");
+    assert.strictEqual(g.win.eval('getAvailableMonsters(monsterState).length'),4);
+    assert.strictEqual(g.win.eval('isValidMonsterTerritory("kraken","CAN")'),true,"Kraken usa extremos de rutas marítimas");
+    assert.strictEqual(g.win.eval('isValidMonsterTerritory("amaru","PER")'),true);
+    assert.strictEqual(g.win.eval('isValidMonsterTerritory("long","CHN")'),true);
+    assert.strictEqual(g.win.eval('isValidMonsterTerritory("anubis","AFO")'),true);
+    assert.strictEqual(g.win.eval('isValidMonsterTerritory("amaru","CHN")'),false,"las zonas deben excluir territorios ajenos");
+
+    const scaled=g.win.eval('createMonsterState("kraken","CAN",6,2)');
+    assert.strictEqual(scaled.maxHp,Math.round(1050*1.24),"PV escala 12% por época mediana");
+    assert.ok(Math.abs(scaled.damage-24*1.20)<0.001,"daño escala 10% por época mediana");
+    assert.strictEqual(scaled.nextRaidRound,8,"el dato prepara el primer saqueo sin ejecutarlo");
+    assert.strictEqual(g.win.eval('monsterState.active'),null,"la función pura no muta el estado global");
+
+    const reward=g.win.eval('getMonsterReward("kraken","AG","CAN",9)');
+    assert.deepStrictEqual({id:reward.id,source:reward.sourceMonster,empire:reward.earnedBy,territory:reward.sourceTerritory,round:reward.earnedRound,inert:reward.inert},
+      {id:"fragmento_abismo",source:"kraken",empire:"AG",territory:"CAN",round:9,inert:true});
+
+    g.win.eval('startGame(1);clickTerr("CAN");monsterState.active=createMonsterState("kraken","CAN",6,1);');
+    const code=g.win.eval('saveGame()');
+    g.win.eval('monsterState=emptyMonsterState();loadGame('+JSON.stringify(code)+')');
+    assert.strictEqual(g.win.eval('monsterState.active.id'),"kraken","save v5 conserva el estado neutral");
+    const previousV5=g.win.eval(`(()=>{const d=JSON.parse(decodeURIComponent(escape(atob(saveGame()))));delete d.monsterState;
+      return btoa(unescape(encodeURIComponent(JSON.stringify(d))));})()`);
+    assert.strictEqual(g.win.eval(`loadGame(${JSON.stringify(previousV5)})`),true);
+    assert.strictEqual(g.win.eval('JSON.stringify(monsterState)'),JSON.stringify({active:null,defeated:{},rewards:[]}),"un save v5 anterior migra a estado vacío");
+
+    g.win.eval('clickTerr("CAN");clickTerr("EUN")');
+    assert.strictEqual(g.win.eval('inBattle&&B.mode==="attack"'),true,"la batalla normal permanece intacta");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

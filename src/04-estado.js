@@ -3,7 +3,7 @@
 /* ==================== ESTADO ==================== */
 let T,F,player,round,phase,selected,inBattle=false,diffMult=1,
     rel,pacts,missions,aiCont=null,humans=[],turnIdx=0,pickMode=1,pendingOffer=null,
-    coalition=null,coalitionCooldownUntil=null,worldBannerTimer=null,eventHistory=[],warHistory=[];
+    coalition=null,coalitionCooldownUntil=null,worldBannerTimer=null,eventHistory=[],warHistory=[],monsterState;
 
 const MISSION_DEFS=[
   {id:"conq1",t:"Conquista tu primer territorio",r:25},
@@ -23,6 +23,7 @@ function veteranLevel(xp){return xp>=80?3:xp>=30?2:1;}
 
 function reset(){
   resetBalanceSession();
+  monsterState=emptyMonsterState();
   T={};F={};
   for(const id in TERR)T[id]={owner:TERR[id].f,troops:6,pop:10,base:0,plague:0};
   for(const f in FACTIONS)F[f]={gold:40,food:20,science:0,faith:0,culture:0,era:0,
