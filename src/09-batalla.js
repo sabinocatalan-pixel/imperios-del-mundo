@@ -164,6 +164,7 @@ function advanceBanner(dt){
 }
 
 function openBattle(from,to,mode){
+  $("battle").classList.remove("bossBattle");
   recordWar();
   inBattle=true;selected=null;
   const defT=T[to],atkT=T[from];
@@ -211,6 +212,36 @@ function openBattle(from,to,mode){
   buildBattleButtons();
   $("battle").style.display="flex";
   requestAnimationFrame(()=>{fitBattleCanvas();B.last=performance.now();requestAnimationFrame(bloop);});
+}
+
+function bossSideState(facId,gold,income){return{fac:facId,gold,income,
+  cool:{melee:0,ranged:0,heavy:0,healer:0,siege:0,champ:0,spec:0,heroAbil:0,air:0},champAlive:false,
+  spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
+  heroSpawned:false,damageByType:{},spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},
+  killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}};}
+function openBossBattle(empireId,originId){
+  const check=canChallengeMonster(monsterState,empireId,round);
+  if(inBattle||!check.ok||check.origin.id!==originId||!markMonsterAttempt(monsterState,empireId,round))return false;
+  const active=monsterState.active,monster=getMonsterById(active.id),f=F[empireId];
+  inBattle=true;selected=null;
+  B={from:originId,to:active.territory,mode:"boss",pvp:false,over:false,result:null,time:0,shake:0,freeze:0,
+    pFacId:empireId,eFacId:empireId,bossId:active.id,bossTerritory:active.territory,challengeOrigin:originId,
+    bossHp:active.hp,bossMaxHp:active.maxHp,bossAttackT:2.5,
+    pHP:(330+f.upArm*40)*1.15,pMax:(330+f.upArm*40)*1.15,eHP:active.hp,eMax:active.maxHp,
+    units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],duel:null,duelDone:true,
+    banner:null,bannerQueue:[],pacing:{tension:false,muerteSubita:false,desgaste:false,resuelto:false},
+    stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
+    last:performance.now(),S:{"1":bossSideState(empireId,80,9+f.upEco*1.4),"-1":bossSideState(empireId,0,0)},
+    eCool:0,turretT:0};
+  $("battle").classList.add("bossBattle");
+  $("btitle").textContent=`BATALLA DE JEFE · ${monster.name}`;
+  $("bnameP").textContent=fname(empireId)+" · "+ERAS[f.era];
+  $("bnameE").textContent=`${monster.icon} ${monster.name}`;
+  $("bmode").textContent="⚠ Jefe mítico · PV persistente · máximo 180s";
+  buildBattleButtons();$("battle").style.display="flex";
+  pushBanner(`${monster.icon} ${monster.name} acepta el desafío`,"#D99BFF",3.5,"Sin patrones especiales en este bloque");
+  requestAnimationFrame(()=>{fitBattleCanvas();B.last=performance.now();requestAnimationFrame(bloop);});
+  return true;
 }
 
 function spawnUnit(side,kind){
@@ -388,7 +419,7 @@ function buildBattleButtons(){
   group("1");
   if(B.pvp)group("-1");
   const r=document.createElement("button");r.className="ub";
-  r.innerHTML=B.pvp?"🏳 Rendición J1":(B.mode==="attack"?"🏳 Retirada":"🏳 Rendir territorio");
+  r.innerHTML=B.pvp?"🏳 Rendición J1":(B.mode==="attack"||B.mode==="boss"?"🏳 Retirada":"🏳 Rendir territorio");
   r.onclick=()=>finishBattle(false,true);
   box.appendChild(r);
 }
@@ -438,6 +469,18 @@ function enemyAI(dt){
   B.eCool=0.7+Math.random()*0.9;
   B.units.push(mkUnit(-1,pick,eF.era,eF.upArm));
 }
+function bossNormalAttack(dt){
+  if(B.mode!=="boss"||B.over)return;
+  B.bossAttackT-=dt;if(B.bossAttackT>0)return;B.bossAttackT=2.5;
+  const active=monsterState.active;if(!active||active.id!==B.bossId)return finishBattle(false);
+  const target=B.units.filter(u=>u.side===1&&u.hp>0).sort((a,b)=>b.x-a.x)[0];
+  if(target){
+    const damage=active.damage*dmgTakenMult(target);target.hp-=damage;target.flash=0.2;
+    B.dmgs.push({x:target.x,y:GROUND-55*target.size,txt:Math.round(damage),t:0.7,c:"#D99BFF"});
+    B.projs.push({x:W-90,y:GROUND-90,tx:target.x,ty:GROUND-25*target.size,t:0.25,c:"#D99BFF"});
+  }else B.pHP-=active.damage*0.35;
+  SFX.hit();if(SET.fx)B.shake=Math.max(B.shake,5);
+}
 function bloop(now){
   if(!B)return;
   let dt=Math.min(0.05,(now-B.last)/1000);B.last=now;
@@ -470,9 +513,10 @@ function bloop(now){
       P.defBuffT=Math.max(0,P.defBuffT-dt);
       P.dmgBuffAllT=Math.max(0,P.dmgBuffAllT-dt);
     }
-    if(!B.pvp)enemyAI(dt);
+    if(B.mode==="boss")bossNormalAttack(dt);
+    else if(!B.pvp)enemyAI(dt);
     // torreta de la base defendida (según nivel de base del territorio)
-    const tb=T[B.to].base;
+    const tb=B.mode==="boss"?0:T[B.to].base;
     if(tb>0){B.turretT-=dt;
       if(B.turretT<=0){
         const targetSide=B.mode==="attack"?1:-1; // la torreta pertenece al territorio "to"
@@ -674,9 +718,14 @@ function bloop(now){
     B.pufs=B.pufs.filter(p=>{p.t-=dt;p.x+=p.vx;p.y+=p.vy;return p.t>0;});
     B.corpses=B.corpses.filter(c=>(c.t-=dt)>0);
     B.shake=Math.max(0,B.shake-dt*30);
+    if(B.mode==="boss")B.bossHp=Math.max(0,B.eHP);
     if(B.eHP<=0)finishBattle(true);
     else if(B.pHP<=0)finishBattle(false);
-    else if(!B.pacing.resuelto&&B.time>=210){
+    else if(B.mode==="boss"&&B.time>=180){
+      B.pacing.resuelto=true;
+      log("⏱ El desafío terminó tras 180s: el monstruo conserva los PV restantes.","loss");
+      finishBattle(false);
+    }else if(!B.pacing.resuelto&&B.time>=210){
       // Resolución forzada (210s): gana quien tenga mayor
       // PVbase%*2 + tropas vivas + dañoCausado/100. Ninguno de los dos
       // términos toca directamente la vida del otro: es un desempate,
@@ -846,6 +895,14 @@ function drawBase(x,side,hp,max,lvl,color){
   bx.fillStyle=side===1?"#D9A441":"#C63D2F";
   bx.fillRect(x-32,GROUND-128,64*Math.max(0,hp/max),5);
 }
+function drawBoss(){
+  const monster=getMonsterById(B.bossId),x=W-72,y=GROUND-62;
+  bx.fillStyle="rgba(8,16,22,.86)";bx.strokeStyle="#D99BFF";bx.lineWidth=5;
+  bx.beginPath();bx.arc(x,y,48,0,Math.PI*2);bx.fill();bx.stroke();
+  bx.font="48px Segoe UI Emoji, sans-serif";bx.textAlign="center";bx.fillStyle="#fff";bx.fillText(monster.icon,x,y+16);
+  bx.fillStyle="rgba(0,0,0,.65)";bx.fillRect(x-65,y-70,130,10);
+  bx.fillStyle="#B15FE0";bx.fillRect(x-64,y-69,128*Math.max(0,B.eHP/B.eMax),8);
+}
 function drawBattle(){
   bx.setTransform(bScale,0,0,bScale,0,0);
   bx.clearRect(-2,-2,W+4,LH+4);
@@ -858,7 +915,7 @@ function drawBattle(){
   const pLvl=B.mode==="defense"?T[B.to].base:0;
   const eLvl=B.mode==="attack"?T[B.to].base:0;
   drawBase(50,1,B.pHP,B.pMax,pLvl,FACTIONS[B.pFacId].color);
-  drawBase(W-50,-1,B.eHP,B.eMax,eLvl,FACTIONS[B.eFacId].color);
+  if(B.mode==="boss")drawBoss();else drawBase(W-50,-1,B.eHP,B.eMax,eLvl,FACTIONS[B.eFacId].color);
   for(const u of B.units)drawStick(u);
     bx.strokeStyle="#F4E9C8";bx.lineWidth=2;
     for(const p of B.projs){bx.beginPath();bx.moveTo(p.x,p.y);bx.strokeStyle=p.c||"#F4E9C8";
@@ -899,8 +956,10 @@ function drawBattle(){
     bx.fillStyle="rgba(8,16,22,.72)";bx.fillRect(0,0,W,LH);
     bx.fillStyle=B.result?"#D9A441":"#C63D2F";
     bx.font="700 40px Impact, Arial";
-    bx.fillText(B.result?(B.mode==="attack"?"¡TERRITORIO CONQUISTADO!":"¡DEFENSA EXITOSA!")
-      :(B.mode==="attack"?"OFENSIVA RECHAZADA":"TERRITORIO PERDIDO"),W/2,LH*0.44);
+    const resultText=B.mode==="boss"?(B.result?"¡JEFE MÍTICO DERROTADO!":"EL JEFE RESISTE"):
+      (B.result?(B.mode==="attack"?"¡TERRITORIO CONQUISTADO!":"¡DEFENSA EXITOSA!")
+      :(B.mode==="attack"?"OFENSIVA RECHAZADA":"TERRITORIO PERDIDO"));
+    bx.fillText(resultText,W/2,LH*0.44);
     bx.fillStyle="#E8DCC0";bx.font="15px Segoe UI";
     bx.fillText("Volviendo al mapa…",W/2,LH*0.44+38);
   }
@@ -909,6 +968,7 @@ function drawBattle(){
 
 function finishBattle(win,retreat=false){
   if(!B||B.over)return;
+  if(B.mode==="boss")return finishBossBattle(win,retreat);
   B.over=true;B.result=win;
   recordBalanceBattle(B,win);
   const me=B.pFacId,foe=B.eFacId;
@@ -962,5 +1022,33 @@ function finishBattle(win,retreat=false){
     B=null;inBattle=false;
     render();
     if(!checkEnd()&&aiCont){const c=aiCont;aiCont=null;setTimeout(c,350);}
+  },1500);
+}
+
+function finishBossBattle(win,retreat=false){
+  if(!B||B.over||B.mode!=="boss")return;
+  B.over=true;B.result=win;recordBalanceBattle(B,win);applyVeterancyGains();
+  const snapshot=B,active=monsterState.active,monster=active&&getMonsterById(active.id);
+  const ownerBefore=T[snapshot.bossTerritory].owner;
+  if(active&&active.id===snapshot.bossId)active.hp=Math.max(0,Math.min(active.maxHp,snapshot.eHP));
+  if(win&&active&&monster){
+    const reward=getMonsterReward(active.id,snapshot.pFacId,active.territory,round);
+    monsterState.defeated[active.id]=true;if(reward)monsterState.rewards.push(reward);monsterState.active=null;
+    logCausal(`🏆 ${fname(snapshot.pFacId)} derrotó a ${monster.name}. ${reward?reward.name+" quedó registrada como recompensa inerte.":""}`,"win");
+    showWorldBanner("🏆 JEFE MÍTICO DERROTADO",`${monster.name} cayó. Sus saqueos terminaron.`);
+    SFX.win();burstScreen([FACTIONS[snapshot.pFacId].color,"#D99BFF","#D9A441"],110);
+  }else if(active&&monster){
+    const origin=T[snapshot.challengeOrigin],factor=retreat?0.7:0.45;
+    if(origin)origin.troops=Math.max(1,Math.floor(origin.troops*factor));
+    logCausal(retreat
+      ?`🏳 ${fname(snapshot.pFacId)} se retiró ante ${monster.name}; el jefe conserva ${Math.round(active.hp)} PV.`
+      :`💀 ${monster.name} rechazó el desafío de ${fname(snapshot.pFacId)} y conserva ${Math.round(active.hp)} PV.`,"loss");
+    SFX.lose();
+  }
+  // El modo jefe nunca altera la propiedad del territorio.
+  T[snapshot.bossTerritory].owner=ownerBefore;
+  setTimeout(()=>{
+    if(B!==snapshot)return;
+    $("battle").style.display="none";$("battle").classList.remove("bossBattle");B=null;inBattle=false;selected=snapshot.bossTerritory;render();
   },1500);
 }

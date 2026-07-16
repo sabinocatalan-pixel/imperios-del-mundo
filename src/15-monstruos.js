@@ -193,11 +193,7 @@ function resetMonsterAttemptsForRound(state,currentRound){
 }
 function prepareMonsterChallenge(empireId){
   const check=canChallengeMonster(monsterState,empireId,round);if(!check.ok)return false;
-  const active=monsterState.active,monster=getMonsterById(active.id);
-  if(!markMonsterAttempt(monsterState,empireId,round))return false;
-  const message=`${monster.icon} Desafío preparado desde ${TERR[check.origin.id].n}. La batalla de jefe se implementará en el siguiente bloque.`;
-  logCausal(message);showWorldBanner("⚔ DESAFÍO PREPARADO",message);
-  render();return true;
+  return openBossBattle(empireId,check.origin.id);
 }
 
 /* Render mínimo 3B-3. No ejecuta saqueo, combate, patrones ni recompensas. */

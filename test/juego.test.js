@@ -1120,12 +1120,13 @@ test("Monstruos 3B-5: validación y preparación del desafío", async () => {
     const hpBefore=g.win.eval('monsterState.active.hp'),ownerBefore=g.win.eval('T.PER.owner');
     challengeBtn=[...g.doc.querySelectorAll("#terrBtns button")].find(b=>b.textContent==="⚔ Desafiar");
     challengeBtn.click();
-    assert.strictEqual(g.win.eval('inBattle'),false,"preparar no abre batalla todavía");
+    assert.strictEqual(g.win.eval('inBattle'),true,"el desafío abre la batalla base de jefe");
+    assert.strictEqual(g.win.eval('B.mode'),"boss");
     assert.strictEqual(g.win.eval('monsterState.active.hp'),hpBefore,"no cambia PV del jefe");
     assert.strictEqual(g.win.eval('T.PER.owner'),ownerBefore,"no cambia propietario");
     assert.strictEqual(g.win.eval('monsterState.active.attemptsThisRound.AG'),6,"registra el intento de la ronda");
-    assert.ok(g.doc.getElementById("worldBannerText").textContent.includes("siguiente bloque"),"explica que el combate aún no está activo");
     assert.strictEqual(g.win.eval('canChallengeMonster(monsterState,"AG",6).ok'),false,"no permite dos intentos en la misma ronda");
+    g.win.eval('B.over=true;document.getElementById("battle").style.display="none";document.getElementById("battle").classList.remove("bossBattle");B=null;inBattle=false;');
 
     const code=g.win.eval('saveGame()');
     g.win.eval('monsterState.active.attemptsThisRound={};loadGame('+JSON.stringify(code)+')');
@@ -1133,6 +1134,61 @@ test("Monstruos 3B-5: validación y preparación del desafío", async () => {
     g.win.eval('round=7;resetMonsterAttemptsForRound(monsterState,round);');
     assert.strictEqual(g.win.eval('monsterState.active.attemptsThisRound.AG'),undefined,"al cambiar de ronda libera el intento");
     assert.strictEqual(g.win.eval('canChallengeMonster(monsterState,"AG",7).ok'),true);
+  }finally{closeGame(g);}
+});
+
+/* 32 (Fase 3B-6A). Batalla base aislada: PV persistente, resolución sin
+   transferencia territorial y recompensa todavía inerte. */
+test("Monstruos 3B-6A: batalla boss y resolución persistente", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");round=6;monsterState.active=createMonsterState("kraken","CAN",6,0);T.CAN.troops=12;selected="CAN";render();');
+    const owner=g.win.eval('T.CAN.owner'),maxHp=g.win.eval('monsterState.active.maxHp');
+    assert.strictEqual(g.win.eval('prepareMonsterChallenge("AG")'),true);
+    assert.strictEqual(g.win.eval('inBattle&&B.mode==="boss"'),true);
+    assert.strictEqual(g.win.eval('B.bossId'),"kraken");assert.strictEqual(g.win.eval('B.challengeOrigin'),"CAN");
+    assert.ok(g.doc.getElementById("btitle").textContent.includes("BATALLA DE JEFE"));
+    assert.ok(g.doc.getElementById("battle").classList.contains("bossBattle"),"usa barra grande de jefe");
+
+    g.win.eval('spawnUnit("1","melee");B.testBossTroop=B.units.find(u=>u.side===1);B.testBossTroop.x=W-80;B.testBossTroop.t=0;');
+    const bossBefore=g.win.eval('B.eHP');
+    g.win.eval('bloop(B.last+50)');
+    assert.ok(g.win.eval('B.eHP')<bossBefore,"las tropas pueden dañar directamente la barra del jefe");
+    assert.strictEqual(g.win.eval('B.bossHp'),g.win.eval('B.eHP'),"bossHp acompaña la barra viva del jefe");
+    const troopBefore=g.win.eval('B.testBossTroop.hp');
+    g.win.eval('B.bossAttackT=0;bossNormalAttack(0.1)');
+    assert.ok(g.win.eval('B.testBossTroop.hp')<troopBefore,"el jefe ejecuta un ataque normal sin patrones especiales");
+
+    g.win.eval('B.eHP=B.eMax-123;finishBattle(false);');
+    await sleep(1700);
+    assert.strictEqual(g.win.eval('monsterState.active.hp'),maxHp-123,"derrota conserva el daño causado");
+    assert.strictEqual(g.win.eval('monsterState.active.id'),"kraken");
+    assert.strictEqual(g.win.eval('T.CAN.owner'),owner,"derrota no transfiere territorio");
+    assert.ok(g.win.eval('T.CAN.troops<12'),"derrota aplica pérdidas militares al origen");
+    const survived=g.win.eval('saveGame()');
+    g.win.eval('monsterState.active.hp=1;loadGame('+JSON.stringify(survived)+')');
+    assert.strictEqual(g.win.eval('monsterState.active.hp'),maxHp-123,"save conserva PV del jefe superviviente");
+
+    g.win.eval('round=7;resetMonsterAttemptsForRound(monsterState,round);T.CAN.troops=12;prepareMonsterChallenge("AG");B.eHP=B.eMax-200;finishBattle(false,true);');
+    await sleep(1700);
+    assert.strictEqual(g.win.eval('monsterState.active.hp'),maxHp-200,"retirada conserva PV restante");
+    assert.strictEqual(g.win.eval('T.CAN.owner'),owner);
+    assert.strictEqual(g.win.eval('T.CAN.troops'),8,"retirada aplica pérdida reducida del 30%");
+
+    g.win.eval('round=8;resetMonsterAttemptsForRound(monsterState,round);T.CAN.troops=12;prepareMonsterChallenge("AG");B.eHP=0;finishBattle(true);');
+    await sleep(1700);
+    assert.strictEqual(g.win.eval('monsterState.active'),null,"victoria elimina el monstruo y detiene saqueos");
+    assert.strictEqual(g.win.eval('monsterState.defeated.kraken'),true);
+    assert.ok(g.win.eval('monsterState.rewards.some(r=>r.sourceMonster==="kraken"&&r.inert)'),"victoria emite recompensa inerte");
+    assert.strictEqual(g.win.eval('T.CAN.owner'),owner,"victoria tampoco transfiere territorio");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("derrotó a Kraken"))'));
+
+    g.win.eval('monsterState.active=createMonsterState("amaru","PER",9,0);T.PER.owner="SO";T.BRA.owner="AG";T.BRA.troops=7;round=9;selected="PER";render();');
+    assert.strictEqual(g.win.eval('prepareMonsterChallenge("AG")'),false,"no abre boss sin ocho tropas");
+    assert.strictEqual(g.win.eval('inBattle'),false);
+
+    g.win.eval('monsterState.active=null;selected=null;T.CAN.owner="AG";T.EUN.owner="CO";T.CAN.troops=8;clickTerr("CAN");clickTerr("EUN")');
+    assert.strictEqual(g.win.eval('inBattle&&B.mode==="attack"'),true,"la batalla normal sigue funcionando");
   }finally{closeGame(g);}
 });
 

@@ -157,6 +157,9 @@
   .hpbar{height:11px;background:#22333c;border-radius:5px;overflow:hidden;border:1px solid var(--line)}
   .hpbar i{display:block;height:100%;background:var(--gold);transition:width .15s}
   #bhpE i{background:var(--danger)}
+  #battle.bossBattle #bhpE{height:18px;border-color:#D99BFF;box-shadow:0 0 8px rgba(177,95,224,.7)}
+  #battle.bossBattle #bhpE i{background:#B15FE0}
+  #battle.bossBattle #btitle{color:#D99BFF}
   #btitle{font-family:Impact,"Arial Narrow Bold",sans-serif;letter-spacing:2px;text-transform:uppercase;
     text-align:center;flex:1;min-width:130px;font-size:14px}
   #btop2{display:flex;justify-content:center;align-items:center;gap:14px;font-size:13px;padding:2px}
