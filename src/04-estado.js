@@ -3,7 +3,7 @@
 /* ==================== ESTADO ==================== */
 let T,F,player,round,phase,selected,inBattle=false,diffMult=1,
     rel,pacts,missions,aiCont=null,humans=[],turnIdx=0,pickMode=1,pendingOffer=null,
-    coalition=null,worldBannerTimer=null,eventHistory=[],warHistory=[];
+    coalition=null,coalitionCooldownUntil=null,worldBannerTimer=null,eventHistory=[],warHistory=[];
 
 const MISSION_DEFS=[
   {id:"conq1",t:"Conquista tu primer territorio",r:25},
@@ -28,7 +28,7 @@ function reset(){
     upArm:0,upEco:0,upMed:0,heroes:[null,null,null],heroWeaponLv:1,heroProgress:{},
     veterancy:nuevaVeterancia(),ai:true};
   player=null;round=1;phase="pick";selected=null;inBattle=false;aiCont=null;scenario=null;
-  humans=[];turnIdx=0;pendingOffer=null;coalition=null;eventHistory=[];warHistory=[];
+  humans=[];turnIdx=0;pendingOffer=null;coalition=null;coalitionCooldownUntil=null;eventHistory=[];warHistory=[];
   rel={};pacts=[];
   for(const a in FACTIONS)for(const b in FACTIONS)if(a!==b)rel[a+b]=0;
   missions=MISSION_DEFS.map(m=>({...m,done:false}));

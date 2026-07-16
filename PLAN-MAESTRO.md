@@ -144,7 +144,7 @@ AmenazaLider  = (PoderLider − PromedioResto) / PromedioResto
 ProbCoalición = clamp((Amenaza−0.25)*0.8, 0, 0.75)          // solo si Amenaza>0.25
 DeseoUnirse   = Amenaza*0.4 + (rel<0)*0.25 + vecino*0.15 + aggr*0.10 − pactoConLíder*0.25   // se une si >0.45
 ```
-Al activarse: **banner narrativo a pantalla** ("🌍 Tu imperio domina el mundo. [miembros] forman una COALICIÓN para contenerte — 5 rondas") + pactos automáticos entre miembros + prioridad de ataque al líder. Expira a 5 rondas o si Amenaza <0.15.
+Al activarse: **banner narrativo a pantalla** ("🌍 Tu imperio domina el mundo. [miembros] forman una COALICIÓN para contenerte") + pactos automáticos entre miembros + prioridad de ataque al líder. Dura 3 rondas en Difícil y 4 en Pesadilla; los pactos automáticos duran lo mismo. Expira al completar esa duración o si Amenaza <0.15. Tras expirar entra en cooldown por 2 rondas; después solo puede reformarse si AmenazaLider >0.35.
 
 ### Aleatoriedad viva (sustituye tasas fijas; regirá eventos futuros)
 ```

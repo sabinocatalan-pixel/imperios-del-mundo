@@ -32,7 +32,8 @@ function saveGame(){
   if(!player){return "";}
   const data={v:5,T,Fx:F,player,round,diffMult,rel,humans,
     pacts:pacts.map(p=>({a:p.a,b:p.b,type:p.type,rounds:p.rounds,coalition:!!p.coalition})),
-    mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,coalition,eventHistory,warHistory};
+    mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,
+    coalition,coalitionCooldownUntil,eventHistory,warHistory};
   return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
 }
 function loadGame(code){
@@ -42,7 +43,12 @@ function loadGame(code){
     T=d.T;F=d.Fx;player=d.player;round=d.round;diffMult=d.diffMult;
     for(const fid in F)migrateFactionToV5(F[fid]);
     humans=d.humans||[d.player];turnIdx=0;pendingOffer=null;player=humans[0];
-    rel=d.rel;pacts=d.pacts;coalition=d.coalition||null;
+    rel=d.rel;pacts=d.pacts||[];coalition=d.coalition||null;
+    coalitionCooldownUntil=Number.isFinite(d.coalitionCooldownUntil)?d.coalitionCooldownUntil:null;
+    if(coalition){
+      coalition.rounds=Math.min(coalition.rounds||coalitionDuration(),coalitionDuration());
+      pacts.forEach(p=>{if(p.coalition)p.rounds=Math.min(p.rounds,coalition.rounds);});
+    }
     eventHistory=d.eventHistory||[];warHistory=d.warHistory||[];
     missions=MISSION_DEFS.map((m,i)=>({...m,done:!!d.mis[i]}));
     if(d.leg){LEGACY.wins=d.leg.wins|0;LEGACY.hardWins=d.leg.hardWins|0;LEGACY.scen=d.leg.scen||{};LEGACY.heroes=d.leg.heroes||{};}

@@ -671,8 +671,8 @@ test("Veteranía por regimiento: XP sube, Nv2 aplica +8%, derrota fuerte descuen
 });
 
 /* 21 (Fase 2E). La coalición usa la fórmula de amenaza, crea alianzas
-   visibles entre miembros y expira al completar sus cinco rondas. */
-test("Coalición anti-líder: activa según fórmula y expira a cinco rondas", async () => {
+   visibles entre miembros, expira y respeta cooldown y reformación. */
+test("Coalición anti-líder: duración, cooldown y reformación según amenaza", async () => {
   const g=makeGame();
   try{
     g.win.eval('startGame(1.3); clickTerr("CAN"); round=8; Math.random=()=>0;');
@@ -695,12 +695,37 @@ test("Coalición anti-líder: activa según fórmula y expira a cinco rondas", a
       "la coalición no debe inflar recursos, tropas, bases ni mejoras de sus miembros");
     assert.ok(g.win.eval('coalition.members.every(f=>coalitionDesire(f,coalition.leader,leaderThreat().threat)>0.45)'),
       "cada miembro debe superar estrictamente DeseoUnirse > 0.45");
-    assert.ok(g.doc.getElementById("empInfo").textContent.includes("Coalición en tu contra: 5 rondas"),
+    assert.strictEqual(g.win.eval('coalition.rounds'),3,"Difícil debe crear coaliciones de tres rondas");
+    assert.ok(g.win.eval('pacts.filter(p=>p.coalition).every(p=>p.rounds===3)'),"los pactos deben durar lo mismo");
+    assert.ok(g.doc.getElementById("empInfo").textContent.includes("Coalición en tu contra: 3 rondas"),
       "el estado de coalición debe permanecer visible en el panel Imperio");
     assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("COALICIÓN"))'),"la coalición debe sumarse al Resumen");
     g.win.eval('coalition.rounds=1; updateCoalition();');
-    assert.strictEqual(g.win.eval('coalition'),null,"la coalición debe expirar al completar cinco rondas");
+    assert.strictEqual(g.win.eval('coalition'),null,"la coalición debe expirar al completar su duración");
+    assert.strictEqual(g.win.eval('coalitionCooldownUntil'),11,"debe bloquear las dos rondas posteriores");
     assert.ok(!g.win.eval('pacts.some(p=>p.coalition)'),"los pactos automáticos deben terminar con la coalición");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Cooldown: 2 rondas"))'),"el Resumen explica expiración y cooldown");
+    g.win.eval('round=9;updateCoalition();');
+    assert.strictEqual(g.win.eval('coalition'),null,"no puede reformarse durante cooldown");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("2 rondas restantes"))'),"el Resumen muestra cooldown restante");
+    g.win.eval('round=11;F.AG.gold=0;F.AG.science=0;ownedBy("AG").forEach(id=>{T[id].troops=6;T[id].base=0;});updateCoalition();');
+    assert.strictEqual(g.win.eval('coalition'),null,"tras cooldown no se reforma con amenaza <=35%");
+    g.win.eval('F.AG.gold=10000;F.AG.science=1000;ownedBy("AG").forEach(id=>{T[id].troops=99;T[id].base=3;});updateCoalition();');
+    assert.ok(g.win.eval('coalition!==null'),"tras cooldown puede reformarse con amenaza >35%");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("reforman"))'),"el Resumen explica la reformación");
+
+    g.win.eval('coalition=null;pacts=pacts.filter(p=>!p.coalition);coalitionCooldownUntil=null;diffMult=1.5;round=8;updateCoalition();');
+    assert.strictEqual(g.win.eval('coalition.rounds'),4,"Pesadilla debe crear coaliciones de cuatro rondas");
+    assert.ok(g.win.eval('pacts.filter(p=>p.coalition).every(p=>p.rounds===4)'),"los pactos de Pesadilla duran cuatro rondas");
+
+    g.win.eval('coalition=null;coalitionCooldownUntil=14;round=12;');
+    const guardado=g.win.eval('saveGame()');
+    g.win.eval('coalitionCooldownUntil=null;loadGame('+JSON.stringify(guardado)+')');
+    assert.strictEqual(g.win.eval('coalitionCooldownUntil'),14,"el save debe persistir el cooldown");
+    const antiguo=g.win.eval(`(()=>{const d=JSON.parse(decodeURIComponent(escape(atob(saveGame()))));delete d.coalitionCooldownUntil;
+      return btoa(unescape(encodeURIComponent(JSON.stringify(d))));})()`);
+    assert.strictEqual(g.win.eval(`loadGame(${JSON.stringify(antiguo)})`),true);
+    assert.strictEqual(g.win.eval('coalitionCooldownUntil'),null,"un save anterior migra sin cooldown activo");
   }finally{closeGame(g);}
 });
 
