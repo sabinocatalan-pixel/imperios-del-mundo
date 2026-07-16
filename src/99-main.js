@@ -3,3 +3,4 @@
 buildMap();
 reset();
 tryAutoLoad();
+initBalanceMode();

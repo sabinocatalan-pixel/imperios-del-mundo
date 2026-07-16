@@ -34,7 +34,7 @@ function makeGame(opts = {}) {
     runScripts: "dangerously",
     resources: "usable",
     pretendToBeVisual: true,
-    url: "http://localhost/",
+    url: opts.url || "http://localhost/",
     beforeParse(window) {
       window.matchMedia = () => ({ matches: false });
       stubCanvas(window);
@@ -896,6 +896,31 @@ test("IA usa sanador y asedio; save v5 migra veteranía de apoyo", async () => {
     assert.strictEqual(g.win.eval(`loadGame(${JSON.stringify(v4)})`),true);
     assert.strictEqual(g.win.eval('F.AG.veterancy.healer.xp'),0,"v4 migra sanador a 0 XP");
     assert.strictEqual(g.win.eval('F.AG.veterancy.siege.xp'),0,"v4 migra asedio a 0 XP");
+  }finally{closeGame(g);}
+});
+
+/* Prueba 19 (Fase 2F). La telemetría registra una batalla local y su
+   exportación separa partida/acumulado en JSON válido. */
+test("Modo Balance: registra batalla y exporta JSON válido", async () => {
+  const g=makeGame();
+  try{
+    assert.strictEqual(g.doc.getElementById("btnBalance").style.display,"none","el panel empieza oculto");
+    g.win.eval('for(let i=0;i<5;i++)document.getElementById("gameTitle").click()');
+    assert.strictEqual(g.win.eval('balanceEnabled'),true,"cinco toques al título activan Modo Balance");
+    assert.strictEqual(g.doc.getElementById("balanceModal").style.display,"flex","la activación abre el panel");
+    g.win.eval('closeModals();startGame(1);clickTerr("CAN");clickTerr("CAN");clickTerr("EUN");B.pvp=true;B.S["1"].gold=999;spawnUnit("1","melee");B.S["1"].damageByType.melee=42;B.time=75;finishBattle(true);');
+    const exported=g.win.eval('exportBalanceJSON()'),data=JSON.parse(exported);
+    assert.strictEqual(data.version,1);
+    assert.strictEqual(data.partida.batallas,1,"debe registrar una batalla por partida");
+    assert.strictEqual(data.partida.duracionMediaBatalla,75);
+    assert.strictEqual(data.partida.unidades.melee.uso,1,"debe registrar uso por tipo");
+    assert.strictEqual(data.partida.unidades.melee.tasaVictoria,1,"debe registrar tasa de victoria");
+    assert.strictEqual(data.partida.danoMedioPorTipo.melee,42,"debe registrar daño medio por tipo");
+    assert.ok(data.acumulado.batallas>=1,"debe persistir acumulado en localStorage");
+    assert.ok(g.win.localStorage.getItem("IDM_BALANCE_PARTIDA_V1"),"la telemetría por partida debe persistirse localmente");
+    assert.doesNotThrow(()=>JSON.parse(g.win.eval('copyBalanceJSON()')),"copiar debe exportar JSON válido");
+    const debug=makeGame({url:"http://localhost/?debug=1"});
+    try{assert.strictEqual(debug.win.eval('balanceEnabled'),true,"?debug=1 activa Modo Balance");}finally{closeGame(debug);}
   }finally{closeGame(g);}
 });
 

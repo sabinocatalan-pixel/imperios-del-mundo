@@ -185,12 +185,12 @@ function openBattle(from,to,mode){
       "1":{fac:pFacId,gold:80,income:9+pFac.upEco*1.4,
         cool:{melee:0,ranged:0,heavy:0,healer:0,siege:0,champ:0,spec:0,heroAbil:0,air:0},champAlive:false,
         spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
-        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}},
+        heroSpawned:false,damageByType:{},spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}},
       "-1":{fac:eFacId,gold:pvp?80:60,
         income:pvp?(9+eFac.upEco*1.4):(8+eFac.era*1.2)*diffMult,
         cool:{melee:0,ranged:0,heavy:0,healer:0,siege:0,champ:pvp?0:20,spec:pvp?0:26,heroAbil:pvp?0:20,air:0},champAlive:false,
         spdBuffT:0,defBuffT:0,dmgBuffAllT:0,amaruRevived:false,dmgDealt:0,
-        spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}}
+        heroSpawned:false,damageByType:{},spawnedTypes:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0},killsByType:{melee:0,ranged:0,heavy:0,air:0,healer:0,siege:0}}
     },
     eCool:0,turretT:0
   };
@@ -235,7 +235,7 @@ function spawnChamp(side){
   const P=B.S[side],f=F[P.fac];
   const heroId=f.heroes[0];
   if(B.over||!heroId||P.champAlive||P.cool.champ>0)return;
-  P.cool.champ=60;P.champAlive=true;SFX.evolve();
+  P.cool.champ=60;P.champAlive=true;P.heroSpawned=true;SFX.evolve();
   const u=mkUnit(+side,"champ",f.era,0,f.heroWeaponLv);
   u.heroId=heroId;
   if(heroArmaAltActiva(P.fac,heroId)){ // arma alternativa desbloqueada (logro por partida)
@@ -310,6 +310,7 @@ function resolveDuel(){
   else if(reward==="cd"){B.S[winSide].cool.spec=Math.max(0,B.S[winSide].cool.spec-8);rewardTxt="-8s cooldown del especial";}
   else{for(const v of B.units)if(v.side===(+loseSide)&&Math.abs(v.x-d.mid)<140)v.stunT=2;rewardTxt="aturde cercanos 2s";}
   const nameW=ALL_HEROES[winner.heroId].name,nameL=ALL_HEROES[loser.heroId].name;
+  recordBalanceDuel(winner.heroId,loser.heroId);
   log(`⚔ ${nameW} venció a ${nameL} en duelo: ${rewardTxt} (energía de ${nameL} baja).`,"win");
   pushBanner(`⚔ ¡${nameW} gana el duelo!`,"#FFD866",3.5,rewardTxt);
   SFX.win();
@@ -595,12 +596,14 @@ function bloop(now){
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
           tgt.hp-=dm;tgt.flash=0.15;SFX.hit();
           B.S[String(u.side)].dmgDealt+=dm;
+          B.S[String(u.side)].damageByType[u.kind]=(B.S[String(u.side)].damageByType[u.kind]||0)+dm;
           B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:Math.round(dm),t:0.6,
             c:mult>1?"#FFD866":(mult<1?"#9FB3BE":"#F4E9C8")});
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:tgt.x,ty:GROUND-16,t:0.2});
           if(u.kind==="siege"){
             const nearby=B.units.filter(v=>v!==tgt&&v.side===tgt.side&&v.kind!=="air"&&v.hp>0&&Math.abs(v.x-tgt.x)<32);
             for(const v of nearby){const spl=u.dmg*0.35*dmgMultOut*dmgTakenMult(v);v.hp-=spl;v.flash=0.12;
+              B.S[String(u.side)].damageByType[u.kind]=(B.S[String(u.side)].damageByType[u.kind]||0)+spl;
               B.dmgs.push({x:v.x,y:GROUND-50*v.size,txt:Math.round(spl),t:0.6,c:"#D9A441"});}
             const p=B.projs[B.projs.length-1];if(p)p.arc=true;
           }
@@ -643,6 +646,7 @@ function bloop(now){
           if(u.side===1){B.eHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           else{B.pHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           B.S[String(u.side)].dmgDealt+=dmgToBase;
+          B.S[String(u.side)].damageByType[u.kind]=(B.S[String(u.side)].damageByType[u.kind]||0)+dmgToBase;
           SFX.hit();
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:baseX,ty:GROUND-50,t:0.2,arc:u.kind==="siege"});}
       }else{
@@ -906,6 +910,7 @@ function drawBattle(){
 function finishBattle(win,retreat=false){
   if(!B||B.over)return;
   B.over=true;B.result=win;
+  recordBalanceBattle(B,win);
   const me=B.pFacId,foe=B.eFacId;
   // progreso de armas alternativas (por partida): Aníbal cuenta victorias con él activo,
   // Leónidas cuenta batallas completas sobreviviendo (gane o pierda el bando).

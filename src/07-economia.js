@@ -6,6 +6,7 @@ function recordWar(){warHistory.push(round);warHistory=warHistory.filter(r=>roun
 function recordLiveEvent(type,target,negative=false){
   eventHistory.push({type,target,negative,round});
   eventHistory=eventHistory.filter(e=>round-e.round<=3);
+  recordBalanceEvent(type);
 }
 function liveEventProbability(base,type,target=null){
   const vivos=alive(),n=Math.max(1,vivos.length);
@@ -101,6 +102,7 @@ function checkEnd(){
 }
 function endGame(title,text,won=true,winner=null){
   phase="over";
+  recordBalanceGame(winner,won);
   if(won&&!scenario&&humans.length===1)LEGACY.wins++;
   if(won&&!scenario&&humans.length===1&&diffMult===1.3){
     const primero=!LEGACY.hardWins;LEGACY.hardWins=(LEGACY.hardWins|0)+1;

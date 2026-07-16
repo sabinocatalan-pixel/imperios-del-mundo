@@ -22,6 +22,7 @@ function nuevaVeterancia(){return{melee:{xp:0},ranged:{xp:0},heavy:{xp:0},air:{x
 function veteranLevel(xp){return xp>=80?3:xp>=30?2:1;}
 
 function reset(){
+  resetBalanceSession();
   T={};F={};
   for(const id in TERR)T[id]={owner:TERR[id].f,troops:6,pop:10,base:0,plague:0};
   for(const f in FACTIONS)F[f]={gold:40,food:20,science:0,faith:0,culture:0,era:0,

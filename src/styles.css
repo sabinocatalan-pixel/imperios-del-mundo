@@ -117,6 +117,8 @@
     font-size:15px;line-height:1.4;background:rgba(233,220,192,.05);border-radius:0 4px 4px 0}
   .resumenLinea.win{border-left-color:var(--ok)}
   .resumenLinea.loss{border-left-color:var(--danger)}
+  #balanceBody{min-height:48vh;font-size:11px;white-space:pre;resize:none}
+  #balanceWarnings{color:var(--gold)}
   /* ===== BATALLA ===== */
   #battle{position:fixed;inset:0;height:100dvh;background:#0A1720;display:none;flex-direction:column;z-index:75;
     padding-top:var(--sat)}
