@@ -196,6 +196,56 @@ function prepareMonsterChallenge(empireId){
   return openBossBattle(empireId,check.origin.id);
 }
 
+/* Caza automática de IA (3B-7). La decisión usa únicamente condiciones
+   visibles del mapa; la resolución deriva daño y bajas de los mismos stats
+   melee y del jefe, sin multiplicadores de dificultad ni victorias fijadas. */
+function evaluateMonsterHuntDesire(state,empireId){
+  const check=canChallengeMonster(state,empireId,round),active=state&&state.active;
+  if(!active||!F[empireId]||!FACTIONS[empireId])return{ok:false,desire:0,check,components:{}};
+  const origin=check.origin,components={
+    territoryOwner:T[active.territory]&&T[active.territory].owner===empireId?0.35:0,
+    highAccumulatedRaid:(active.raidCount||0)>=2?0.20:0,
+    strongOrigin:origin&&origin.troops>=14?0.20:0,
+    adequateEra:F[empireId].era>=(active.eraMedian||0)?0.15:0,
+    aggressivePersonality:FACTIONS[empireId].aggr*0.10
+  };
+  const desire=Object.values(components).reduce((sum,value)=>sum+value,0);
+  return{ok:check.ok,desire:+desire.toFixed(3),check,components};
+}
+function shouldAIChallengeMonster(state,empireId){
+  const evaluation=evaluateMonsterHuntDesire(state,empireId);
+  return evaluation.ok&&evaluation.desire>=0.55;
+}
+function resolveAIMonsterChallenge(state,empireId){
+  const evaluation=evaluateMonsterHuntDesire(state,empireId);
+  if(!evaluation.ok||evaluation.desire<0.55||!markMonsterAttempt(state,empireId,round))
+    return{attempted:false,win:false,evaluation};
+  const active=state.active,monster=getMonsterById(active.id),origin=T[evaluation.check.origin.id];
+  const territoryOwner=T[active.territory].owner,troopsBefore=origin.troops;
+  const f=F[empireId],meleeLevel=veteranLevel((f.veterancy&&f.veterancy.melee?f.veterancy.melee.xp:0));
+  const melee=unitStats("melee",f.era,f.upArm,meleeLevel),vetDamage=VET_DMG_MULT[meleeLevel]||1;
+  const damage=Math.max(1,Math.round(troopsBefore*melee.dmg*vetDamage));
+  active.hp=Math.max(0,active.hp-damage);
+  const win=active.hp<=0;
+  let reward=null;
+  if(win){
+    const casualties=Math.max(1,Math.ceil(active.damage/melee.hp));
+    origin.troops=Math.max(1,troopsBefore-casualties);
+    reward=getMonsterReward(active.id,empireId,active.territory,round);
+    state.defeated[active.id]=true;if(reward)state.rewards.push(reward);state.active=null;
+  }else origin.troops=Math.max(1,Math.floor(troopsBefore*0.45));
+  // Cazar nunca conquista ni altera el territorio amenazado.
+  T[active.territory].owner=territoryOwner;
+  const result=win
+    ?`lo derrotó tras causar ${damage} de daño; ${reward.name} quedó como recompensa inerte para ${fname(empireId)}`
+    :`fue rechazado tras causar ${damage} de daño; ${monster.name} conserva ${Math.round(active.hp)} PV`;
+  const message=`${FACTIONS[empireId].emb} ${fname(empireId)} intentó cazar a ${monster.name} desde ${TERR[evaluation.check.origin.id].n}: ${result}.`;
+  logCausal(message,win?"win":"loss");
+  const banner=$("worldBanner");
+  if(!banner||banner.style.display!=="flex")showWorldBanner(win?"🏆 CAZA MÍTICA":"⚔ CAZA MÍTICA",message);
+  return{attempted:true,win,damage,origin:evaluation.check.origin.id,troopsBefore,troopsAfter:origin.troops,reward,evaluation};
+}
+
 /* Render mínimo 3B-3. No ejecuta saqueo, combate, patrones ni recompensas. */
 function monsterRouteFor(active){
   if(!active||active.id!=="kraken")return null;

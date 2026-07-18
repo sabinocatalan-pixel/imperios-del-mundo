@@ -161,6 +161,9 @@ function aiTurns(fromTurnFlow){
     }
     if(f.gold>=45&&Math.random()<0.25){const t=T[mineAll[0]];
       if(t&&t.base<3){f.gold-=30+t.base*25;t.base++;}}
+    // La caza mítica usa los mismos requisitos, origen e intento por ronda
+    // que el jugador; la dificultad no modifica su resolución.
+    if(shouldAIChallengeMonster(monsterState,fid))resolveAIMonsterChallenge(monsterState,fid);
     // diplomacia proactiva hacia un humano
     if(!pendingOffer&&Math.random()<0.15){
       const hv=humans.filter(h=>alive().includes(h));

@@ -1268,6 +1268,69 @@ test("Monstruos 3B-6B: patrones especiales avisados y aislados", () => {
   }finally{closeGame(g);}
 });
 
+/* 34 (Fase 3B-7). La IA evalúa la caza con las reglas compartidas y su
+   resolución automática conserva daño, propiedad y recompensa correctos. */
+test("Monstruos 3B-7: IA cazadora simétrica y persistente", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");round=8;
+      function setupAIHunt(empire="AG",troops=14,raidCount=2,eraMedian=0){
+        monsterState=emptyMonsterState();monsterState.active=createMonsterState("amaru","PER",round,eraMedian);
+        monsterState.active.raidCount=raidCount;T.PER.owner=empire;T.PER.troops=troops;
+        F[empire].era=eraMedian;F[empire].upArm=0;F[empire].veterancy.melee.xp=0;
+        turnSummaryLines=[];return monsterState.active;
+      }`);
+
+    g.win.eval('monsterState=emptyMonsterState()');
+    assert.strictEqual(g.win.eval('shouldAIChallengeMonster(monsterState,"AG")'),false,"sin monstruo no intenta");
+
+    g.win.eval('setupAIHunt("AG",7,0,0)');
+    assert.strictEqual(g.win.eval('canChallengeMonster(monsterState,"AG",round).ok'),false);
+    assert.strictEqual(g.win.eval('shouldAIChallengeMonster(monsterState,"AG")'),false,"menos de ocho tropas bloquea la IA");
+
+    g.win.eval('setupAIHunt("AG",14,2,0);for(const id in T)if(T[id].owner==="SO")T[id].owner="AG";T.JPN.owner="SO";');
+    assert.strictEqual(g.win.eval('getMonsterChallengeOrigins(monsterState,"SO").length'),0);
+    assert.strictEqual(g.win.eval('shouldAIChallengeMonster(monsterState,"SO")'),false,"sin conexión no intenta");
+
+    g.win.eval('setupAIHunt("CO",8,0,3);F.CO.era=0');
+    let evaluation=g.win.eval('evaluateMonsterHuntDesire(monsterState,"CO")');
+    assert.ok(evaluation.desire<0.55);assert.strictEqual(g.win.eval('shouldAIChallengeMonster(monsterState,"CO")'),false,"deseo bajo no intenta");
+
+    g.win.eval('setupAIHunt("AG",14,2,0)');
+    evaluation=g.win.eval('evaluateMonsterHuntDesire(monsterState,"AG")');
+    assert.deepStrictEqual({...evaluation.components},{territoryOwner:0.35,highAccumulatedRaid:0.2,strongOrigin:0.2,adequateEra:0.15,aggressivePersonality:0.085});
+    assert.ok(evaluation.desire>=0.55);assert.strictEqual(g.win.eval('shouldAIChallengeMonster(monsterState,"AG")'),true,"deseo alto permite intentar");
+    const ownerBefore=g.win.eval('T.PER.owner'),hpBefore=g.win.eval('monsterState.active.hp');
+    let result=g.win.eval('resolveAIMonsterChallenge(monsterState,"AG")');
+    assert.strictEqual(result.attempted,true);assert.strictEqual(result.win,false);
+    assert.ok(g.win.eval('monsterState.active.hp')<hpBefore,"el intento reduce PV persistentes");
+    assert.strictEqual(g.win.eval('T.PER.troops'),6,"la derrota aplica el mismo factor 0.45");
+    assert.strictEqual(g.win.eval('T.PER.owner'),ownerBefore,"cazar no transfiere territorio");
+    assert.strictEqual(g.win.eval('monsterState.active.attemptsThisRound.AG'),8);
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("intentó cazar")&&x.m.includes("fue rechazado"))'));
+    result=g.win.eval('resolveAIMonsterChallenge(monsterState,"AG")');
+    assert.strictEqual(result.attempted,false,"no permite dos intentos en la ronda");
+    const lossSave=g.win.eval('saveGame()'),savedHp=g.win.eval('monsterState.active.hp');
+    g.win.eval('monsterState.active.hp=1;loadGame('+JSON.stringify(lossSave)+')');
+    assert.strictEqual(g.win.eval('monsterState.active.hp'),savedHp,"guardar/cargar conserva el resultado fallido");
+
+    g.win.eval('round=9;setupAIHunt("SO",14,2,0);monsterState.active.hp=1;');
+    const human=g.win.eval('player'),ownerBeforeWin=g.win.eval('T.PER.owner');
+    result=g.win.eval('resolveAIMonsterChallenge(monsterState,"SO")');
+    assert.strictEqual(result.win,true);assert.strictEqual(g.win.eval('monsterState.active'),null);
+    assert.strictEqual(g.win.eval('monsterState.defeated.amaru'),true);
+    assert.strictEqual(g.win.eval('T.PER.owner'),ownerBeforeWin);
+    assert.ok(g.win.eval('T.PER.troops<14'),"incluso al rematar consume tropas e intento");
+    assert.strictEqual(g.win.eval('monsterState.rewards.length'),1);
+    assert.strictEqual(g.win.eval('monsterState.rewards[0].earnedBy'),"SO");
+    assert.notStrictEqual(g.win.eval('monsterState.rewards[0].earnedBy'),human,"la recompensa no se atribuye al jugador");
+    assert.ok(g.win.eval('monsterState.rewards[0].inert'));
+    const winSave=g.win.eval('saveGame()');g.win.eval('monsterState=emptyMonsterState();loadGame('+JSON.stringify(winSave)+')');
+    assert.strictEqual(g.win.eval('monsterState.defeated.amaru'),true);
+    assert.strictEqual(g.win.eval('monsterState.rewards[0].earnedBy'),"SO","save conserva la recompensa de IA");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
