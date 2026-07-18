@@ -227,6 +227,8 @@ function openBossBattle(empireId,originId){
   B={from:originId,to:active.territory,mode:"boss",pvp:false,over:false,result:null,time:0,shake:0,freeze:0,
     pFacId:empireId,eFacId:empireId,bossId:active.id,bossTerritory:active.territory,challengeOrigin:originId,
     bossHp:active.hp,bossMaxHp:active.maxHp,bossAttackT:2.5,
+    bossPatternState:monster.patterns.map(p=>({id:p.id,cooldown:p.cooldown,remaining:p.cooldown,warning:false,warningT:0,targets:[]})),
+    bossPatternLog:[],bossZones:[],
     pHP:(330+f.upArm*40)*1.15,pMax:(330+f.upArm*40)*1.15,eHP:active.hp,eMax:active.maxHp,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],duel:null,duelDone:true,
     banner:null,bannerQueue:[],pacing:{tension:false,muerteSubita:false,desgaste:false,resuelto:false},
@@ -481,6 +483,76 @@ function bossNormalAttack(dt){
   }else B.pHP-=active.damage*0.35;
   SFX.hit();if(SET.fx)B.shake=Math.max(B.shake,5);
 }
+function bossPatternTargets(patternId){
+  const aliveUnits=B.units.filter(u=>u.side===1&&u.hp>0),front=[...aliveUnits].sort((a,b)=>b.x-a.x)[0];
+  if(!aliveUnits.length)return[];
+  if(patternId==="tentacle_strike"||patternId==="desert_scythe")
+    return aliveUnits.filter(u=>Math.abs(u.x-front.x)<=65);
+  if(patternId==="abyssal_tide")return aliveUnits.filter(u=>u.x>=front.x-180);
+  if(patternId==="serpent_charge")return[...aliveUnits].filter(u=>u.kind!=="air").sort((a,b)=>b.x-a.x).slice(0,1);
+  if(patternId==="venom_cloud")return[...aliveUnits].filter(u=>u.kind!=="air").sort((a,b)=>b.x-a.x).slice(0,1);
+  if(patternId==="celestial_breath")return aliveUnits.filter(u=>u.x>=W-330);
+  if(patternId==="long_storm"){
+    const first=front,rest=aliveUnits.filter(u=>u!==first).sort((a,b)=>Math.abs(b.x-first.x)-Math.abs(a.x-first.x));
+    return[first,...rest.slice(0,1)];
+  }
+  if(patternId==="anubis_judgment")return[[...aliveUnits].sort((a,b)=>b.hp-a.hp)[0]];
+  return[];
+}
+function bossPatternName(patternId){
+  const monster=getMonsterById(B.bossId),pattern=monster&&monster.patterns.find(p=>p.id===patternId);
+  return pattern?pattern.name:patternId;
+}
+function warnBossPattern(slot){
+  const targets=bossPatternTargets(slot.id);if(!targets.length){slot.remaining=slot.cooldown;return false;}
+  slot.warning=true;slot.warningT=1;slot.targets=targets;
+  pushBanner(`⚠ ${bossPatternName(slot.id)}`,"#FFB36B",3.5,"Impacto anunciado en 1 segundo");
+  return true;
+}
+function damageBossPatternTargets(targets,mult,color="#D99BFF"){
+  const active=monsterState.active;
+  for(const target of targets){
+    if(!B.units.includes(target)||target.hp<=0)continue;
+    const damage=active.damage*mult*dmgTakenMult(target);target.hp-=damage;target.flash=0.25;
+    B.dmgs.push({x:target.x,y:GROUND-55*target.size,txt:Math.round(damage),t:0.8,c:color});
+  }
+}
+function executeBossPattern(slot){
+  const targets=slot.targets.filter(u=>B.units.includes(u)&&u.hp>0),id=slot.id;
+  if(id==="tentacle_strike")damageBossPatternTargets(targets,0.75,"#77CFE8");
+  else if(id==="abyssal_tide")for(const u of targets){u.x=Math.max(70,u.x-55);u.stunT=Math.max(u.stunT||0,1.2);}
+  else if(id==="serpent_charge")damageBossPatternTargets(targets,1.5,"#9CE06C");
+  else if(id==="venom_cloud"&&targets[0])B.bossZones.push({type:"poison",x:targets[0].x,radius:70,t:4,tick:0});
+  else if(id==="celestial_breath")damageBossPatternTargets(targets,0.65,"#FFB36B");
+  else if(id==="long_storm")damageBossPatternTargets(targets,0.9,"#B8D8FF");
+  else if(id==="desert_scythe")damageBossPatternTargets(targets,0.8,"#E6C27A");
+  else if(id==="anubis_judgment")damageBossPatternTargets(targets,1.25,"#FFD866");
+  if(targets.length)B.bossPatternLog.push({id,time:B.time});
+  slot.warning=false;slot.warningT=0;slot.targets=[];slot.remaining=slot.cooldown;
+  SFX.hit();if(SET.fx)B.shake=Math.max(B.shake,7);
+}
+function updateBossZones(dt){
+  if(!B||B.mode!=="boss"||!B.bossZones)return;
+  const active=monsterState.active;
+  for(const zone of B.bossZones){
+    zone.t-=dt;zone.tick+=dt;
+    if(zone.type==="poison"&&active){
+      const damagePerSecond=active.damage*0.12;
+      for(const u of B.units)if(u.side===1&&u.hp>0&&u.kind!=="air"&&Math.abs(u.x-zone.x)<=zone.radius){
+        const damage=damagePerSecond*dt*dmgTakenMult(u);u.hp-=damage;u.flash=0.08;
+      }
+    }
+  }
+  B.bossZones=B.bossZones.filter(z=>z.t>0);
+}
+function updateBossPatterns(dt){
+  if(!B||B.mode!=="boss"||B.over||!B.bossPatternState)return;
+  updateBossZones(dt);
+  for(const slot of B.bossPatternState){
+    if(slot.warning){slot.warningT-=dt;if(slot.warningT<=0)executeBossPattern(slot);}
+    else{slot.remaining-=dt;if(slot.remaining<=1)warnBossPattern(slot);}
+  }
+}
 function bloop(now){
   if(!B)return;
   let dt=Math.min(0.05,(now-B.last)/1000);B.last=now;
@@ -513,7 +585,7 @@ function bloop(now){
       P.defBuffT=Math.max(0,P.defBuffT-dt);
       P.dmgBuffAllT=Math.max(0,P.dmgBuffAllT-dt);
     }
-    if(B.mode==="boss")bossNormalAttack(dt);
+    if(B.mode==="boss"){bossNormalAttack(dt);updateBossPatterns(dt);}
     else if(!B.pvp)enemyAI(dt);
     // torreta de la base defendida (según nivel de base del territorio)
     const tb=B.mode==="boss"?0:T[B.to].base;
@@ -903,6 +975,26 @@ function drawBoss(){
   bx.fillStyle="rgba(0,0,0,.65)";bx.fillRect(x-65,y-70,130,10);
   bx.fillStyle="#B15FE0";bx.fillRect(x-64,y-69,128*Math.max(0,B.eHP/B.eMax),8);
 }
+function drawBossHazards(){
+  if(!B||B.mode!=="boss")return;
+  const pulse=SET.fx?0.18+Math.abs(Math.sin(B.time*8))*0.15:0.28;
+  for(const slot of B.bossPatternState||[])if(slot.warning){
+    bx.globalAlpha=pulse;bx.fillStyle="#FFB36B";bx.strokeStyle="#FFD866";bx.lineWidth=3;
+    for(const u of slot.targets){
+      if(!B.units.includes(u)||u.hp<=0)continue;
+      const y=u.kind==="air"?GROUND-105:GROUND-18;
+      bx.beginPath();bx.arc(u.x,y,slot.id==="abyssal_tide"?58:38,0,Math.PI*2);bx.fill();bx.stroke();
+    }
+    bx.globalAlpha=1;bx.fillStyle="#FFF2C7";bx.font="700 14px Segoe UI";bx.textAlign="center";
+    bx.fillText(`⚠ ${bossPatternName(slot.id)} · ${Math.max(0,slot.warningT).toFixed(1)}s`,W/2,GROUND-145);
+  }
+  for(const zone of B.bossZones||[])if(zone.type==="poison"){
+    bx.globalAlpha=SET.fx?0.2+Math.abs(Math.sin(B.time*4))*0.1:0.25;
+    bx.fillStyle="#75B84A";bx.strokeStyle="#B7E77F";bx.lineWidth=2;
+    bx.beginPath();bx.ellipse(zone.x,GROUND-12,zone.radius,28,0,0,Math.PI*2);bx.fill();bx.stroke();
+    bx.globalAlpha=1;
+  }
+}
 function drawBattle(){
   bx.setTransform(bScale,0,0,bScale,0,0);
   bx.clearRect(-2,-2,W+4,LH+4);
@@ -916,6 +1008,7 @@ function drawBattle(){
   const eLvl=B.mode==="attack"?T[B.to].base:0;
   drawBase(50,1,B.pHP,B.pMax,pLvl,FACTIONS[B.pFacId].color);
   if(B.mode==="boss")drawBoss();else drawBase(W-50,-1,B.eHP,B.eMax,eLvl,FACTIONS[B.eFacId].color);
+  drawBossHazards();
   for(const u of B.units)drawStick(u);
     bx.strokeStyle="#F4E9C8";bx.lineWidth=2;
     for(const p of B.projs){bx.beginPath();bx.moveTo(p.x,p.y);bx.strokeStyle=p.c||"#F4E9C8";

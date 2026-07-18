@@ -1192,6 +1192,82 @@ test("Monstruos 3B-6A: batalla boss y resolución persistente", async () => {
   }finally{closeGame(g);}
 });
 
+/* 33 (Fase 3B-6B). Los ocho patrones se programan desde sus datos, avisan
+   antes del impacto y nunca intervienen en una batalla territorial normal. */
+test("Monstruos 3B-6B: patrones especiales avisados y aislados", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");
+      function setupBossPatternTest(id){
+        const monster=getMonsterById(id);
+        monsterState.active=createMonsterState(id,monster.zone.territories[0],6,0);
+        const mk=(kind,x,hp=null)=>{const u=mkUnit(1,kind,0,0,1);u.x=x;if(hp!==null)u.hp=hp;return u;};
+        B={mode:"boss",over:false,bossId:id,time:20,shake:0,eHP:monsterState.active.hp,eMax:monsterState.active.maxHp,
+          pHP:500,pMax:500,units:[mk("melee",820),mk("heavy",760),mk("air",700)],dmgs:[],projs:[],pufs:[],corpses:[],
+          banner:null,bannerQueue:[],bossZones:[],bossPatternLog:[],
+          bossPatternState:monster.patterns.map(p=>({id:p.id,cooldown:p.cooldown,remaining:p.cooldown,warning:false,warningT:0,targets:[]})),
+          S:{"1":{fac:"AG",defBuffT:0,champAlive:false},"-1":{fac:"AG",defBuffT:0,champAlive:false}},stones:[]};
+        return B;
+      }
+      function fireBossPattern(index){
+        const slot=B.bossPatternState[index];slot.remaining=1;updateBossPatterns(.01);
+        const warned=slot.warning&&slot.warningT===1&&slot.targets.length>0&&!!B.banner;
+        drawBossHazards();updateBossPatterns(1.01);
+        return{warned,remaining:slot.remaining,log:B.bossPatternLog[B.bossPatternLog.length-1]};
+      }`);
+
+    for(const id of["kraken","amaru","long","anubis"]){
+      g.win.eval(`setupBossPatternTest(${JSON.stringify(id)})`);
+      assert.strictEqual(g.win.eval('B.bossPatternState.length'),2,`${id} tiene exactamente dos patrones`);
+      assert.deepStrictEqual(Array.from(g.win.eval('B.bossPatternState.map(x=>x.id)')),
+        Array.from(g.win.eval('getMonsterById(B.bossId).patterns.map(x=>x.id)')));
+    }
+
+    g.win.eval('setupBossPatternTest("kraken")');
+    let hp=g.win.eval('B.units[0].hp'),base=g.win.eval('B.pHP');
+    let fired=g.win.eval('fireBossPattern(0)');
+    assert.ok(fired.warned);assert.strictEqual(fired.log.id,"tentacle_strike");
+    assert.strictEqual(fired.remaining,7,"respeta cooldown de siete segundos");
+    assert.ok(g.win.eval('B.units[0].hp')<hp,"tentáculo daña la primera línea");
+    const beforeX=g.win.eval('B.units[0].x');fired=g.win.eval('fireBossPattern(1)');
+    assert.strictEqual(fired.log.id,"abyssal_tide");assert.strictEqual(fired.remaining,14);
+    assert.ok(g.win.eval('B.units[0].x')<beforeX);assert.ok(g.win.eval('B.units[0].stunT>=1.2'));
+    assert.strictEqual(g.win.eval('B.pHP'),base,"los patrones no dañan la base");
+
+    g.win.eval('setupBossPatternTest("amaru")');hp=g.win.eval('B.units[0].hp');
+    fired=g.win.eval('fireBossPattern(0)');assert.strictEqual(fired.log.id,"serpent_charge");
+    assert.strictEqual(fired.remaining,6);assert.ok(g.win.eval('B.units[0].hp')<hp);
+    fired=g.win.eval('fireBossPattern(1)');assert.strictEqual(fired.log.id,"venom_cloud");
+    assert.strictEqual(g.win.eval('B.bossZones[0].t'),4,"la nube comienza con cuatro segundos");
+    hp=g.win.eval('B.units[0].hp');g.win.eval('updateBossZones(1)');
+    assert.ok(g.win.eval('B.units[0].hp')<hp,"la nube aplica daño temporal");
+    g.win.eval('updateBossZones(3.01)');assert.strictEqual(g.win.eval('B.bossZones.length'),0);
+
+    g.win.eval('setupBossPatternTest("long")');
+    const groundHp=g.win.eval('B.units[0].hp'),airHp=g.win.eval('B.units[2].hp');
+    fired=g.win.eval('fireBossPattern(0)');assert.strictEqual(fired.log.id,"celestial_breath");
+    assert.strictEqual(fired.remaining,8);assert.ok(g.win.eval('B.units[0].hp')<groundHp);
+    assert.ok(g.win.eval('B.units[2].hp')<airHp,"el aliento alcanza unidades aéreas");
+    const aliveBefore=Array.from(g.win.eval('B.units.map(u=>u.hp)'));
+    fired=g.win.eval('fireBossPattern(1)');assert.strictEqual(fired.log.id,"long_storm");
+    const aliveAfter=Array.from(g.win.eval('B.units.map(u=>u.hp)'));
+    assert.strictEqual(aliveAfter.filter((v,i)=>v<aliveBefore[i]).length,2,"la tormenta golpea dos unidades separadas");
+
+    g.win.eval('setupBossPatternTest("anubis");B.units[0].hp=40;B.units[1].hp=180;B.units[2].hp=70;');
+    fired=g.win.eval('fireBossPattern(0)');assert.strictEqual(fired.log.id,"desert_scythe");
+    const hpLow=g.win.eval('B.units[0].hp'),hpHigh=g.win.eval('B.units[1].hp');
+    fired=g.win.eval('fireBossPattern(1)');assert.strictEqual(fired.log.id,"anubis_judgment");
+    assert.strictEqual(fired.remaining,14);assert.strictEqual(g.win.eval('B.units[0].hp'),hpLow);
+    assert.ok(g.win.eval('B.units[1].hp')<hpHigh,"Juicio elige la unidad con mayor PV actual");
+
+    g.win.eval('setupBossPatternTest("kraken");B.units=[];B.bossPatternState[0].remaining=.5;updateBossPatterns(1)');
+    assert.strictEqual(g.win.eval('B.bossPatternLog.length'),0,"sin objetivo no ejecuta ni falla");
+    assert.strictEqual(g.win.eval('B.bossPatternState[0].warning'),false);
+    g.win.eval('setupBossPatternTest("kraken");B.mode="attack";B.bossPatternState[0].remaining=0;updateBossPatterns(2)');
+    assert.strictEqual(g.win.eval('B.bossPatternLog.length'),0,"una batalla normal nunca ejecuta patrones");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
