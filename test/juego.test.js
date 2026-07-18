@@ -1149,6 +1149,8 @@ test("Monstruos 3B-6A: batalla boss y resolución persistente", async () => {
     assert.strictEqual(g.win.eval('B.bossId'),"kraken");assert.strictEqual(g.win.eval('B.challengeOrigin'),"CAN");
     assert.ok(g.doc.getElementById("btitle").textContent.includes("BATALLA DE JEFE"));
     assert.ok(g.doc.getElementById("battle").classList.contains("bossBattle"),"usa barra grande de jefe");
+    assert.ok(g.win.eval('B.banner.subtxt.includes("avisan 1 segundo")'),"el banner explica los patrones activos");
+    assert.ok(!g.win.eval('B.banner.subtxt.includes("Sin patrones")'),"no conserva texto obsoleto de 3B-6A");
 
     g.win.eval('spawnUnit("1","melee");B.testBossTroop=B.units.find(u=>u.side===1);B.testBossTroop.x=W-80;B.testBossTroop.t=0;');
     const bossBefore=g.win.eval('B.eHP');

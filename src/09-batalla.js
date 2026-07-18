@@ -241,7 +241,7 @@ function openBossBattle(empireId,originId){
   $("bnameE").textContent=`${monster.icon} ${monster.name}`;
   $("bmode").textContent="⚠ Jefe mítico · PV persistente · máximo 180s";
   buildBattleButtons();$("battle").style.display="flex";
-  pushBanner(`${monster.icon} ${monster.name} acepta el desafío`,"#D99BFF",3.5,"Sin patrones especiales en este bloque");
+  pushBanner(`${monster.icon} ${monster.name} acepta el desafío`,"#D99BFF",3.5,"Sus dos patrones avisan 1 segundo antes del impacto");
   requestAnimationFrame(()=>{fitBattleCanvas();B.last=performance.now();requestAnimationFrame(bloop);});
   return true;
 }
