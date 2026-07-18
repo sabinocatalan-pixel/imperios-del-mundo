@@ -20,12 +20,33 @@
   <button class="icobtn" id="btnPanteon" title="Panteón">⭐</button>
   <div class="htitle"><h1 id="gameTitle">Imperios del Mundo <span>IV</span></h1></div>
   <button class="icobtn" id="btnBalance" title="Modo Balance" style="display:none">📊</button>
+  <button class="icobtn" id="btnHelp" title="Ayuda rápida" aria-expanded="false" aria-controls="quickHelp">?</button>
   <button class="icobtn" id="btnSettings" title="Ajustes">⚙️</button>
 </header>
 
 <div id="resbar"></div>
 <div id="status"></div>
 <div id="worldBanner"><div><strong id="worldBannerTitle"></strong><span id="worldBannerText"></span></div></div>
+<aside id="quickHelp" class="quickHelp" role="dialog" aria-modal="false" aria-labelledby="quickHelpTitle" hidden>
+  <div class="quickHelpHead">
+    <h2 id="quickHelpTitle">? Ayuda rápida</h2>
+    <button id="closeQuickHelp" class="act" aria-label="Cerrar ayuda">Cerrar</button>
+  </div>
+  <p class="quickHelpIntro">Puedes consultar esta guía sin pausar ni reiniciar la partida.</p>
+  <div class="quickHelpGrid">
+    <section><h3>🎯 Objetivo y victoria</h3><p>Haz crecer tu imperio. Ganas al conquistar el mundo o alcanzar una victoria cultural o religiosa; la campaña añade objetivos propios.</p></section>
+    <section><h3>🗺 Territorios</h3><p>Cada territorio tiene dueño, tropas, población, base y recurso. Toca uno tuyo y después un vecino enemigo para atacar.</p></section>
+    <section><h3>⚔ Atacar y defender</h3><p>En batalla despliega unidades con oro. Atacar busca conquistar; al defender, conserva tu base y evita perder el territorio. Puedes retirarte para reducir pérdidas.</p></section>
+    <section><h3>💰 Recursos</h3><p>🪙 Oro compra tropas y mejoras · 🌾 Comida recluta · 🔬 Ciencia avanza de época · ✨ Fe busca victoria religiosa · 🎭 Cultura busca victoria cultural.</p></section>
+    <section><h3>⭐ Héroes</h3><p>Equipa un héroe activo y hasta dos consejeros. El héroe combate con habilidad propia; los consejeros solo aportan su pasiva indicada.</p></section>
+    <section><h3>💚 Apoyo y asedio</h3><p>Los sanadores curan aliados y no atacan. El asedio dispara por encima de tropas y castiga bases, pero queda anulado si un melee se acerca.</p></section>
+    <section><h3>🌍 Coalición</h3><p>En Difícil y Pesadilla, varios imperios pueden coordinarse contra quien domina demasiado. No reciben estadísticas extra: comparten objetivo y pactos.</p></section>
+    <section><h3>🐉 Monstruos míticos</h3><p>Desde ronda 6 puede aparecer una amenaza que saquea cada dos rondas. Controla el territorio afectado o uno conectado y reúne al menos 8 tropas para desafiarla.</p></section>
+    <section><h3>◆ Recompensa inerte</h3><p>Al vencer se registra una reliquia inerte: todavía no concede bonos ni puede equiparse. El equipamiento llegará después, en la Fase 3C.</p></section>
+    <section class="quickHelpFuture"><h3>🧭 Próximas mejoras planificadas</h3><p>Unidades counter · mejora de torres/base · recompensas y reliquias en 3C · balance de dificultad · más claridad táctica. Son información futura: aún no están implementadas.</p></section>
+  </div>
+  <label class="quickHelpDismiss"><input type="checkbox" id="hideQuickHelp"> No volver a mostrar esta guía al iniciar</label>
+</aside>
 <div id="mapwrap"><svg id="map" viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg"></svg>
   <div id="mythicLegend" hidden>
     <button id="mythicLegendToggle" aria-expanded="false" aria-controls="mythicLegendBody">? Leyenda mítica</button>

@@ -5,3 +5,4 @@ initMythicMapUI();
 reset();
 tryAutoLoad();
 initBalanceMode();
+initQuickHelp();

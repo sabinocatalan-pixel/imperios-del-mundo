@@ -24,6 +24,26 @@ function rainAll(){const cs=Object.values(FACTIONS).map(f=>f.color);
 
 /* ==================== MODALES / AJUSTES ==================== */
 function closeModals(){document.querySelectorAll(".modal").forEach(m=>m.style.display="none");}
+const QUICK_HELP_HIDE_KEY="imperiosOcultarAyuda";
+function quickHelpHidden(){try{return localStorage.getItem(QUICK_HELP_HIDE_KEY)==="1";}catch(e){return false;}}
+function saveQuickHelpPreference(hidden){
+  try{if(hidden)localStorage.setItem(QUICK_HELP_HIDE_KEY,"1");else localStorage.removeItem(QUICK_HELP_HIDE_KEY);}
+  catch(e){/* localStorage no disponible: la ayuda sigue funcionando */}
+}
+function openQuickHelp(automatic=false){
+  if(inBattle||automatic&&quickHelpHidden())return false;
+  $("quickHelp").hidden=false;$("btnHelp").setAttribute("aria-expanded","true");return true;
+}
+function closeQuickHelp(){
+  $("quickHelp").hidden=true;$("btnHelp").setAttribute("aria-expanded","false");
+}
+function initQuickHelp(){
+  $("hideQuickHelp").checked=quickHelpHidden();
+  $("btnHelp").onclick=()=>{SFX.click();openQuickHelp(false);};
+  $("closeQuickHelp").onclick=()=>{SFX.click();closeQuickHelp();};
+  $("hideQuickHelp").onchange=e=>saveQuickHelpPreference(e.target.checked);
+  openQuickHelp(true);
+}
 $("btnSettings").onclick=()=>{SFX.click();$("setModal").style.display="flex";};
 $("btnMissions").onclick=()=>{SFX.click();
   $("misList").innerHTML=missions.map(m=>
@@ -48,4 +68,3 @@ $("btnLoad").onclick=()=>{if($("loadCode").value)loadGame($("loadCode").value);}
 function setPickMode(m){pickMode=m;SFX.click();
   $("mode1").className="act"+(m===1?" gold":"");
   $("mode2").className="act"+(m===2?" gold":"");}
-

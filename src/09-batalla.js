@@ -164,6 +164,7 @@ function advanceBanner(dt){
 }
 
 function openBattle(from,to,mode){
+  closeQuickHelp();
   $("battle").classList.remove("bossBattle");
   recordWar();
   inBattle=true;selected=null;
@@ -222,6 +223,7 @@ function bossSideState(facId,gold,income){return{fac:facId,gold,income,
 function openBossBattle(empireId,originId){
   const check=canChallengeMonster(monsterState,empireId,round);
   if(inBattle||!check.ok||check.origin.id!==originId||!markMonsterAttempt(monsterState,empireId,round))return false;
+  closeQuickHelp();
   const active=monsterState.active,monster=getMonsterById(active.id),f=F[empireId];
   inBattle=true;selected=null;
   B={from:originId,to:active.territory,mode:"boss",pvp:false,over:false,result:null,time:0,shake:0,freeze:0,

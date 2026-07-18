@@ -1333,6 +1333,39 @@ test("Monstruos 3B-7: IA cazadora simétrica y persistente", () => {
   }finally{closeGame(g);}
 });
 
+/* 35 (Fase 3B-9). Ayuda rápida opcional, persistente y ajena a batalla. */
+test("Ayuda rápida: abre, cierra y recuerda la preferencia", () => {
+  const g=makeGame();
+  try{
+    const helpBtn=g.doc.getElementById("btnHelp"),panel=g.doc.getElementById("quickHelp");
+    assert.ok(helpBtn,"el botón Ayuda aparece en el encabezado");
+    assert.strictEqual(panel.hidden,false,"la guía inicial se ofrece al jugador nuevo");
+    g.doc.getElementById("closeQuickHelp").click();
+    assert.strictEqual(panel.hidden,true,"la ayuda puede cerrarse");
+    helpBtn.click();assert.strictEqual(panel.hidden,false,"el botón vuelve a abrirla");
+
+    const hide=g.doc.getElementById("hideQuickHelp");hide.checked=true;
+    hide.dispatchEvent(new g.win.Event("change",{bubbles:true}));
+    assert.strictEqual(g.win.localStorage.getItem("imperiosOcultarAyuda"),"1","guarda No volver a mostrar");
+    g.win.eval('closeQuickHelp()');
+    assert.strictEqual(g.win.eval('openQuickHelp(true)'),false,"la preferencia evita la apertura automática");
+    assert.strictEqual(panel.hidden,true);
+    assert.strictEqual(g.win.eval('openQuickHelp(false)'),true,"la apertura manual siempre sigue disponible");
+
+    const text=panel.textContent;
+    assert.ok(text.includes("reliquia inerte")&&text.includes("Fase 3C"),"explica recompensa inerte y fase futura");
+    assert.ok(text.includes("Unidades counter")&&text.includes("mejora de torres/base"),"las mejoras futuras son solo informativas");
+    assert.ok(!panel.classList.contains("modal"),"usa un cajón ligero y no un modal bloqueante");
+    assert.ok(g.doc.querySelector("style").textContent.includes("max-height:72dvh"),"en móvil deja parte del mapa visible");
+
+    g.win.eval('closeQuickHelp();inBattle=true');
+    assert.strictEqual(g.win.eval('openQuickHelp(false)'),false,"no abre durante una batalla activa");
+    assert.strictEqual(panel.hidden,true);
+    g.win.eval('inBattle=false;openQuickHelp(false);T.CAN.owner="AG";T.EUN.owner="CO";openBattle("CAN","EUN","attack")');
+    assert.strictEqual(panel.hidden,true,"una batalla cierra la ayuda que ya estaba abierta");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
