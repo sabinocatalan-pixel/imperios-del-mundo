@@ -131,7 +131,7 @@ function updateCoalition(){
 function aiTurns(fromTurnFlow){
   if(inBattle)return;
   if(!fromTurnFlow&&phase!=="play")return;
-  phase="ai";selected=null;relicChangeOpen=false;
+  phase="ai";selected=null;relicChangeOpen=false;aiRelicChangeEmpire=null;
   setStatus("Los imperios rivales maniobran…");render();
   const enemies=alive().filter(x=>!humans.includes(x));let i=0;
   function step(){
@@ -140,6 +140,8 @@ function aiTurns(fromTurnFlow){
     const fid=enemies[i++],f=F[fid],P=FACTIONS[fid];
     const mineAll=ownedBy(fid);
     if(!mineAll.length){setTimeout(step,80);return;} // facción eliminada durante la ronda
+    aiRelicChangeEmpire=fid;
+    try{applyAIRelicChoice(currentRelicState(),fid);}finally{aiRelicChangeEmpire=null;}
     // economía según personalidad
     const spend=P.eco>0.6?0.5:0.75;
     if(f.gold>=25&&Math.random()<spend+0.25){

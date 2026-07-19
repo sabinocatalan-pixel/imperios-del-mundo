@@ -114,7 +114,8 @@ function migrateRelicState(state){
   const factions={};
   for(const id in parts.factions)factions[id]={...parts.factions[id],
     equippedRelic:parts.factions[id].equippedRelic||null,
-    ankhUsedRound:Number.isFinite(parts.factions[id].ankhUsedRound)?parts.factions[id].ankhUsedRound:null};
+    ankhUsedRound:Number.isFinite(parts.factions[id].ankhUsedRound)?parts.factions[id].ankhUsedRound:null,
+    aiRelicChangedRound:Number.isFinite(parts.factions[id].aiRelicChangedRound)?parts.factions[id].aiRelicChangedRound:null};
   const migrated={monsterState,factions};
   for(const id in factions)factions[id].equippedRelic=validateEquippedRelic(migrated,id);
   return migrated;
@@ -123,18 +124,20 @@ function migrateRelicState(state){
 /* Fase 3C-2: un único slot puede gestionarse solo durante la ventana de
    inicio del turno. Estas operaciones no consultan ni aplican efectos. */
 function currentRelicState(){
-  return{monsterState,factions:F,phase,player,inBattle,relicChangeOpen,feedback:true};
+  return{monsterState,factions:F,territories:T,round,phase,player,inBattle,relicChangeOpen,aiRelicChangeEmpire,feedback:true};
 }
 function relicActionParts(state){
   const parts=relicStateParts(state);
-  return{...parts,phase:state&&state.phase,player:state&&state.player,
+  return{...parts,round:state&&state.round,phase:state&&state.phase,player:state&&state.player,
     inBattle:!!(state&&state.inBattle),relicChangeOpen:!!(state&&state.relicChangeOpen),
+    aiRelicChangeEmpire:state&&state.aiRelicChangeEmpire,
     feedback:!!(state&&state.feedback)};
 }
 function canChangeRelic(state,empireId){
   const parts=relicActionParts(state);
-  return !!(parts.factions[empireId]&&parts.phase==="play"&&!parts.inBattle&&
-    parts.player===empireId&&parts.relicChangeOpen);
+  const humanWindow=parts.phase==="play"&&parts.player===empireId&&parts.relicChangeOpen;
+  const aiWindow=parts.phase==="ai"&&parts.aiRelicChangeEmpire===empireId;
+  return !!(parts.factions[empireId]&&!parts.inBattle&&(humanWindow||aiWindow));
 }
 function getEquippedRelic(state,empireId){
   const parts=relicActionParts(state),id=validateEquippedRelic(parts,empireId);
@@ -159,6 +162,46 @@ function unequipRelic(state,empireId){
   if(!canChangeRelic(parts,empireId)||!previous)return false;
   parts.factions[empireId].equippedRelic=null;
   relicChangeFeedback(state,`Retiraste ${previous.name}.`);
+  return true;
+}
+
+/* Fase 3C-4: elección determinista y explicable al inicio del turno IA.
+   Solo observa el mapa actual; no simula batallas ni altera los efectos. */
+function getAIRelicDecision(state,empireId){
+  const parts=relicActionParts(state),faction=parts.factions[empireId];
+  if(!faction)return{relicId:null,reason:""};
+  const owned=getEmpireRelics(parts,empireId).map(r=>r.id),current=validateEquippedRelic(parts,empireId);
+  if(!owned.length)return{relicId:null,reason:""};
+  const territories=state&&state.territories||T;
+  const ids=Object.keys(territories).filter(id=>territories[id].owner===empireId);
+  const threatened=ids.some(id=>(ADJ[id]||[]).some(other=>territories[other]&&territories[other].owner!==empireId&&
+    territories[other].troops>territories[id].troops*(1+(territories[id].base||0)*0.2)));
+  const attackReady=ids.some(id=>territories[id].troops>=8&&(ADJ[id]||[]).some(other=>territories[other]&&
+    territories[other].owner!==empireId&&!pactBetween(empireId,territories[other].owner)&&
+    territories[id].troops>territories[other].troops*1.2));
+  const coastalImportant=ids.some(id=>isCoastalTerritory(id)&&((territories[id].base||0)>0||territories[id].troops>=8));
+  const priorities=[
+    {id:"ankh_anubis",active:threatened,reason:"sostener sus defensas"},
+    {id:"aliento_long",active:attackReady,reason:"reforzar sus ofensivas"},
+    {id:"perla_abismo",active:coastalImportant,reason:"proteger sus costas"},
+    {id:"escama_amaru",active:!!faction.heroes[0],reason:"apoyar a su héroe"}
+  ];
+  const choice=priorities.find(x=>x.active&&owned.includes(x.id));
+  return choice?{relicId:choice.id,reason:choice.reason}:{relicId:current,reason:""};
+}
+function chooseAIRelic(state,empireId){return getAIRelicDecision(state,empireId).relicId;}
+function shouldAIChangeRelic(state,empireId){
+  const choice=chooseAIRelic(state,empireId),current=validateEquippedRelic(state,empireId);
+  return !!(choice&&choice!==current&&canChangeRelic(state,empireId)&&
+    relicActionParts(state).factions[empireId].aiRelicChangedRound!==state.round);
+}
+function applyAIRelicChoice(state,empireId){
+  const parts=relicActionParts(state),decision=getAIRelicDecision(state,empireId),current=validateEquippedRelic(state,empireId);
+  if(!decision.relicId||decision.relicId===current||!canChangeRelic(state,empireId)||
+    parts.factions[empireId].aiRelicChangedRound===parts.round)return false;
+  if(!equipRelic({...state,feedback:false},empireId,decision.relicId))return false;
+  parts.factions[empireId].aiRelicChangedRound=parts.round;
+  logCausal(`${fname(empireId)} equipó ${getRelicById(decision.relicId).name} para ${decision.reason}.`);
   return true;
 }
 

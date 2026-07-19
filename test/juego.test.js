@@ -1604,6 +1604,54 @@ test("Reliquias 3C-3C: Aliento ofensivo y Ankh tras defensa", async () => {
   }finally{closeGame(g);}
 });
 
+/* 41 (Fase 3C-4). La IA elige solo reliquias propias durante su ventana
+   de inicio, conserva un único slot y usa los mismos efectos. */
+test("Reliquias 3C-4: elección IA simétrica, causal y persistente", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");phase="ai";relicChangeOpen=false;
+      aiRelicChangeEmpire="SO";turnSummaryLines=[];monsterState.rewards=[];`);
+    assert.strictEqual(g.win.eval('chooseAIRelic(currentRelicState(),"SO")'),null,"sin reliquias no elige");
+    assert.strictEqual(g.win.eval('applyAIRelicChoice(currentRelicState(),"SO")'),false);
+
+    g.win.eval('monsterState.rewards=[getMonsterReward("amaru","AG","PER",8)];F.SO.heroes[0]="anibal"');
+    assert.strictEqual(g.win.eval('applyAIRelicChoice(currentRelicState(),"SO")'),false,"no equipa recompensa ajena");
+    assert.strictEqual(g.win.eval('F.SO.equippedRelic'),null);
+
+    g.win.eval('monsterState.rewards.push(getMonsterReward("amaru","SO","PER",8))');
+    assert.strictEqual(g.win.eval('applyAIRelicChoice(currentRelicState(),"SO")'),true,"equipa una reliquia propia");
+    assert.strictEqual(g.win.eval('F.SO.equippedRelic'),"escama_amaru");
+    assert.strictEqual(g.win.eval('turnSummaryLines.filter(x=>x.m.includes("Escama de Amaru")).length'),1,"registra un cambio real");
+    assert.strictEqual(g.win.eval('applyAIRelicChoice(currentRelicState(),"SO")'),false,"no reequipa lo mismo");
+    assert.strictEqual(g.win.eval('turnSummaryLines.filter(x=>x.m.includes("Escama de Amaru")).length'),1,"no duplica la línea causal");
+
+    g.win.eval(`monsterState.rewards.push(getMonsterReward("long","SO","CHN",8));
+      (()=>{const from=ownedBy("SO").find(id=>ADJ[id].some(x=>T[x].owner!=="SO"));
+        const to=ADJ[from].find(x=>T[x].owner!=="SO");T[from].troops=30;T[to].troops=2;})();`);
+    assert.strictEqual(g.win.eval('chooseAIRelic(currentRelicState(),"SO")'),"aliento_long","el contexto ofensivo justifica el cambio");
+    assert.strictEqual(g.win.eval('applyAIRelicChoice(currentRelicState(),"SO")'),false,"no cambia dos veces en la misma ronda");
+    g.win.eval('round++');
+    assert.strictEqual(g.win.eval('applyAIRelicChoice(currentRelicState(),"SO")'),true);
+    assert.strictEqual(g.win.eval('F.SO.equippedRelic'),"aliento_long","el slot reemplaza la anterior");
+    assert.strictEqual(g.win.eval('typeof F.SO.equippedRelic'),"string","mantiene un solo slot");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Aliento del Long")&&x.m.includes("ofensivas"))'));
+
+    g.win.eval('aiRelicChangeEmpire=null');
+    assert.strictEqual(g.win.eval('canChangeRelic(currentRelicState(),"SO")'),false,"fuera de la ventana no puede cambiar");
+    assert.strictEqual(g.win.eval('equipRelic(currentRelicState(),"SO","escama_amaru")'),false);
+
+    const saved=g.win.eval('saveGame()');
+    g.win.eval('F.SO.equippedRelic=null;loadGame('+JSON.stringify(saved)+')');
+    assert.strictEqual(g.win.eval('F.SO.equippedRelic'),"aliento_long","guardar/cargar conserva la elección IA");
+
+    g.win.eval(`monsterState.rewards.push(getMonsterReward("long","AG","CHN",8));
+      F.AG.equippedRelic="aliento_long";phase="play";player="AG";relicChangeOpen=true;`);
+    assert.strictEqual(g.win.eval(`JSON.stringify(getActiveRelicEffect(currentRelicState(),"SO",{battleType:"normal",role:"attacker",duel:false}))`),
+      g.win.eval(`JSON.stringify(getActiveRelicEffect(currentRelicState(),"AG",{battleType:"normal",role:"attacker",duel:false}))`),
+      "IA y jugador reciben exactamente el mismo efecto");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
