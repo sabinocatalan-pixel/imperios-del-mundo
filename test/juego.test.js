@@ -1354,7 +1354,7 @@ test("Ayuda rápida: abre, cierra y recuerda la preferencia", () => {
 
     const text=panel.textContent;
     assert.ok(text.includes("garantiza su reliquia base")&&text.includes("slot único"),"explica recompensa y equipamiento vigentes");
-    assert.ok(text.includes("counters")&&text.includes("torres/base"),"las mejoras futuras son solo informativas");
+    assert.ok(text.includes("Counters")&&text.includes("torres/base"),"counters ya se explican y torres/base siguen como mejora futura");
     assert.ok(!panel.classList.contains("modal"),"usa un cajón ligero y no un modal bloqueante");
     assert.ok(g.doc.querySelector("style").textContent.includes("max-height:72dvh"),"en móvil deja parte del mapa visible");
 
@@ -1785,6 +1785,45 @@ test("Counters 3F-2: aplicación centralizada y exclusiones", () => {
     assert.strictEqual(g.win.eval('getCounterMultiplier("champ","heavy",{duel:true})'),1,"duelo excluido");
     assert.strictEqual(g.win.eval('getCounterMultiplier("air","heavy",{battleType:"boss"})'),1,"boss excluido");
     assert.strictEqual(g.win.eval('getStructureMultiplier("air",{battleType:"boss"})'),1,"boss conserva daño estructural");
+  }finally{closeGame(g);}
+});
+
+/* 46 (Fase 3F-3). La metadata alimenta botones y ayuda; los avisos de
+   ventaja/desventaja aparecen una sola vez y quedan fuera de duelo/boss. */
+test("Counters 3F-3: claridad compacta y avisos causales", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");F.AG.era=2;F.AG.heroes[0]="anibal";
+      T.EUN.owner="CO";openBattle("CAN","EUN","attack")`);
+    const buttonText=kind=>g.win.eval(`B.btnRefs.find(r=>r.side==="1"&&r.kind==="${kind}").el.textContent`);
+    const melee=buttonText("melee"),ranged=buttonText("ranged"),heavy=buttonText("heavy");
+    assert.ok(melee.includes("Vence a")&&melee.includes("Débil contra")&&melee.includes("No alcanza"));
+    assert.ok(ranged.includes("Vence a")&&ranged.includes("Débil contra"));
+    assert.ok(heavy.includes("No alcanza")&&heavy.includes("Resiste Héroe"));
+    assert.ok(buttonText("healer").includes("No ataca"));
+    assert.ok(buttonText("siege").includes("Melee <80 px lo anula"));
+    assert.ok(buttonText("air").includes("Estructuras: ×0.75"));
+    assert.ok(buttonText("champ").includes("Especial")&&buttonText("champ").includes("Pesada resiste"));
+    assert.ok(g.win.eval('B.btnRefs.filter(r=>r.side==="1"&&["melee","ranged","heavy","healer","siege","air","champ"].includes(r.kind)).every(r=>r.el.title&&r.el.getAttribute("aria-label"))'));
+
+    const help=g.doc.getElementById("quickHelp").textContent;
+    for(const text of["Counters","Distancia es su counter natural","Melee dentro de 80 px","Pesada recibe solo ×0.85","Aérea ×0.75"])
+      assert.ok(help.includes(text),`la ayuda debe explicar: ${text}`);
+
+    g.win.eval(`B.units=[];B.banner=null;B.bannerQueue=[];B.counterNotices={};B.eCool=999;
+      B.good=mkUnit(1,"melee",0,0);B.good.x=200;B.good.t=0;
+      B.bad=mkUnit(-1,"ranged",0,0);B.bad.x=220;B.bad.t=0;
+      B.units=[B.good,B.bad];B.last=100;bloop(150);`);
+    assert.ok(g.win.eval('B.dmgs.some(d=>String(d.txt).startsWith("▲"))'),"golpe favorable muestra ▲");
+    assert.ok(g.win.eval('B.dmgs.some(d=>String(d.txt).startsWith("▼"))'),"golpe desfavorable muestra ▼");
+    assert.strictEqual(g.win.eval('Object.keys(B.counterNotices).length'),2);
+    const noticesBefore=g.win.eval('(B.banner?1:0)+B.bannerQueue.length');
+    g.win.eval('B.good.t=0;B.bad.t=0;B.last=200;bloop(250)');
+    assert.strictEqual(g.win.eval('(B.banner?1:0)+B.bannerQueue.length'),noticesBefore,"no repite el mismo matchup");
+
+    assert.strictEqual(g.win.eval('announceCounterOnce({kind:"champ"},{kind:"champ"},1.5)'),false,"duelo no anuncia counters");
+    g.win.eval('B.mode="boss"');
+    assert.strictEqual(g.win.eval('announceCounterOnce({kind:"air"},{kind:"heavy"},1.5)'),false,"boss no anuncia counters");
   }finally{closeGame(g);}
 });
 

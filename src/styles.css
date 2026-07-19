@@ -202,6 +202,7 @@
     border-radius:8px;background:transparent;color:var(--parchment);font-family:inherit;
     font-size:11px;line-height:1.25;cursor:pointer;overflow:hidden;padding:4px 6px}
   .ub small{display:block;color:var(--gold);font-size:10px}
+  .ub .counterInfo{max-width:150px;margin-top:2px;color:#D7E2E6;font-size:8.5px;line-height:1.15;white-space:normal}
   .ub .cdo{position:absolute;left:0;bottom:0;width:100%;background:rgba(233,220,192,.28);pointer-events:none}
   .ub:disabled{opacity:.35}
   .ub.gold{border-color:var(--gold);color:var(--gold)}

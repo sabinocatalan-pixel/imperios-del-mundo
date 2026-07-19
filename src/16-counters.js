@@ -25,6 +25,7 @@ const UNIT_COUNTER_CATALOG={
 };
 
 const HERO_COUNTER_RULES={hero:{heavy:0.85},ranged:{hero:1}};
+const COUNTER_ICONS={melee:"🗡",ranged:"🏹",heavy:"🛡",healer:"✚",siege:"💥",air:"✈️",hero:"⭐"};
 
 function normalizedCounterKind(kind){return kind==="champ"?"hero":kind;}
 function getCounterMultiplier(attackerKind,defenderKind,context={}){
@@ -52,4 +53,19 @@ function getCounterDescription(kind){
   const unreachable=COUNTER_MATRIX[normalized]?COUNTER_TYPES.filter(target=>COUNTER_MATRIX[normalized][target]===0):[];
   return{kind:normalized,label:meta.label,role:meta.role,venceA:getStrongTargets(normalized),debilContra:getWeakAgainst(normalized),
     noAlcanza:unreachable,reglaEspecial:meta.specialRule,minRange:meta.minRange||0,suppressedBy:[...(meta.suppressedBy||[])]};
+}
+function counterKindName(kind){const meta=UNIT_COUNTER_CATALOG[normalizedCounterKind(kind)];return meta?meta.label:kind;}
+function counterKindList(kinds){return kinds.map(kind=>`${COUNTER_ICONS[kind]||""} ${counterKindName(kind)}`).join(", ");}
+function getCounterButtonHelp(kind){
+  const d=getCounterDescription(kind);if(!d)return{compact:"",full:""};
+  if(d.kind==="healer")return{compact:"Cura aliados · No ataca · máx. 2",full:d.reglaEspecial};
+  if(d.kind==="hero")return{compact:"Especial · Pesada resiste su daño",full:d.reglaEspecial+" Pesada recibe ×0.85 de su daño."};
+  const lines=[];
+  if(d.venceA.length)lines.push(`Vence a: ${counterKindList(d.venceA)}`);
+  if(d.debilContra.length)lines.push(`Débil contra: ${counterKindList(d.debilContra)}`);
+  if(d.noAlcanza.length)lines.push(`No alcanza: ${counterKindList(d.noAlcanza)}`);
+  if(d.kind==="heavy")lines.push("Resiste Héroe: ×0.85");
+  if(d.kind==="siege")lines.push("Melee <80 px lo anula");
+  if(d.kind==="air")lines.push("Estructuras: ×0.75");
+  return{compact:lines.join(" · "),full:[...lines,d.reglaEspecial].filter(Boolean).join(". ")};
 }

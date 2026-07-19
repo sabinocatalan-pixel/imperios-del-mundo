@@ -148,6 +148,17 @@ function pushBanner(txt,color="#FFD866",duration=3.5,subtxt=null){
   if(!B.banner)B.banner={...item,elapsed:0};
   else B.bannerQueue.push(item);
 }
+function announceCounterOnce(att,def,mult){
+  if(!B||B.mode==="boss"||mult===1||mult===0||att.kind==="healer"||
+    (att.kind==="champ"&&def.kind==="champ"))return false;
+  if(!B.counterNotices)B.counterNotices={};
+  const key=`${normalizedCounterKind(att.kind)}>${normalizedCounterKind(def.kind)}`;
+  if(B.counterNotices[key])return false;B.counterNotices[key]=true;
+  const favorable=mult>1,icon=favorable?"▲":"▼";
+  pushBanner(`${icon} ${counterKindName(att.kind)} ${favorable?"contrarresta a":"es débil contra"} ${counterKindName(def.kind)}: ×${mult}`,
+    favorable?"#FFD866":"#9FB3BE",3.5,"Este aviso aparece una vez por matchup en la batalla");
+  return true;
+}
 function advanceBanner(dt){
   if(B.banner){
     B.banner.elapsed+=dt;
@@ -175,7 +186,7 @@ function openBattle(from,to,mode){
     pHP:0,pMax:0,eHP:0,eMax:0,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],
     duel:null,duelDone:false,
-    banner:null,bannerQueue:[],
+    banner:null,bannerQueue:[],counterNotices:{},
     pacing:{tension:false,muerteSubita:false,desgaste:false,resuelto:false},
     stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
     last:performance.now(),
@@ -404,17 +415,20 @@ function buildBattleButtons(){
     }
     const vetTag=k=>{const lvl=veteranLevel((f.veterancy&&f.veterancy[k]?f.veterancy[k].xp:0));
       return lvl>1?` ${"★".repeat(lvl-1)}`:"";};
+    const addCounterHelp=(b,k)=>{const help=getCounterButtonHelp(k);if(!help.compact)return;
+      const info=document.createElement("small");info.className="counterInfo";info.textContent=help.compact;
+      b.insertBefore(info,b.lastElementChild);b.title=help.full;b.setAttribute("aria-label",`${b.textContent}. ${help.full}`);};
     for(const k of["healer","siege"]){
       const st=unitStats(k,f.era,f.upArm),b=document.createElement("button");b.className="ub";
       b.innerHTML=`${k==="healer"?"✚":"💥"} ${UNIT_NAMES[f.era][k]}${vetTag(k)}<small>${st.cost}🪙 · máx. 2</small><div class="cdo"></div>`;
-      b.onclick=()=>spawnUnit(side,k);box.appendChild(b);
+      addCounterHelp(b,k);b.onclick=()=>spawnUnit(side,k);box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:k});
     }
     for(const k of["melee","ranged","heavy"]){
       const st=unitStats(k,f.era,f.upArm);
       const b=document.createElement("button");b.className="ub";
       b.innerHTML=`${icons[k]} ${UNIT_NAMES[f.era][k]}${vetTag(k)}<small>${st.cost}🪙 · <span class="carrow">${CARROW[k]}</span></small><div class="cdo"></div>`;
-      b.onclick=()=>spawnUnit(side,k);
+      addCounterHelp(b,k);b.onclick=()=>spawnUnit(side,k);
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:k});
     }
@@ -422,7 +436,7 @@ function buildBattleButtons(){
       const st=unitStats("air",f.era,f.upArm);
       const b=document.createElement("button");b.className="ub";
       b.innerHTML=`✈️ ${UNIT_NAMES[f.era].air}${vetTag("air")}<small>${st.cost}🪙 · máx. 2</small><div class="cdo"></div>`;
-      b.onclick=()=>spawnUnit(side,"air");
+      addCounterHelp(b,"air");b.onclick=()=>spawnUnit(side,"air");
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:"air"});
     }
@@ -430,7 +444,7 @@ function buildBattleButtons(){
     if(hero){
       const b=document.createElement("button");b.className="ub gold";
       b.innerHTML=`⭐ ${hero.name}<small>héroe · 60s</small><div class="cdo"></div>`;
-      b.onclick=()=>spawnChamp(side);
+      addCounterHelp(b,"hero");b.onclick=()=>spawnChamp(side);
       box.appendChild(b);
       B.btnRefs.push({el:b,cd:b.lastElementChild,side,kind:"champ"});
       if(hero.habilidad&&hero.habilidad.tipo==="activa"){
@@ -740,11 +754,12 @@ function bloop(now){
           // Orden lógico: matriz → bonus de salida/reliquia ya incorporado en
           // la unidad → defensas, veteranía defensiva y Perla en dmgTakenMult.
           const mult=counterMult(u,tgt);
+          announceCounterOnce(u,tgt,mult);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
           tgt.hp-=dm;tgt.flash=0.15;SFX.hit();
           B.S[String(u.side)].dmgDealt+=dm;
           B.S[String(u.side)].damageByType[u.kind]=(B.S[String(u.side)].damageByType[u.kind]||0)+dm;
-          B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:Math.round(dm),t:0.6,
+          B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:(mult>1?"▲ ":(mult<1?"▼ ":""))+Math.round(dm),t:0.6,
             c:mult>1?"#FFD866":(mult<1?"#9FB3BE":"#F4E9C8")});
           if(u.rng>60)B.projs.push({x:u.x,y:GROUND-22*u.size,tx:tgt.x,ty:GROUND-16,t:0.2});
           if(u.kind==="siege"){
