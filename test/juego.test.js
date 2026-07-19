@@ -1353,8 +1353,8 @@ test("Ayuda rápida: abre, cierra y recuerda la preferencia", () => {
     assert.strictEqual(g.win.eval('openQuickHelp(false)'),true,"la apertura manual siempre sigue disponible");
 
     const text=panel.textContent;
-    assert.ok(text.includes("reliquia inerte")&&text.includes("Fase 3C"),"explica recompensa inerte y fase futura");
-    assert.ok(text.includes("Unidades counter")&&text.includes("mejora de torres/base"),"las mejoras futuras son solo informativas");
+    assert.ok(text.includes("garantiza su reliquia base")&&text.includes("slot único"),"explica recompensa y equipamiento vigentes");
+    assert.ok(text.includes("counters")&&text.includes("torres/base"),"las mejoras futuras son solo informativas");
     assert.ok(!panel.classList.contains("modal"),"usa un cajón ligero y no un modal bloqueante");
     assert.ok(g.doc.querySelector("style").textContent.includes("max-height:72dvh"),"en móvil deja parte del mapa visible");
 
@@ -1472,7 +1472,7 @@ test("Claridad UI: habilidades de héroes y reliquias propias", () => {
 
     g.win.eval('document.getElementById("panteonModal").style.display="none";render()');
     const panel=g.doc.getElementById("relicPanel");
-    assert.ok(panel&&panel.textContent.includes("1 slot"));
+    assert.ok(panel&&panel.textContent.includes("slot único"));
     assert.ok(panel.textContent.includes("Perla del Abismo")&&panel.textContent.includes("Aliento del Long"));
     assert.ok(!panel.textContent.includes("Escama de Amaru"),"no lista reliquias ajenas");
     assert.ok(panel.textContent.includes("Efecto activo al equipar"));
@@ -1511,6 +1511,7 @@ test("Reliquias 3C-3B: Perla defensiva y Escama del héroe", () => {
 
     g.win.eval('T.CAN.owner="AG";T.EUN.owner="CO";openBattle("EUN","CAN","defense")');
     assert.strictEqual(g.win.eval('B.S["1"].relicDamageTakenMult'),0.9,"Perla protege al defensor costero");
+    assert.ok(g.win.eval('B.S["1"].relicUses.perla_abismo.contexts.includes("costa")'),"marca el uso costero para telemetría");
     assert.ok(g.win.eval('B.banner&&B.banner.txt.includes("Perla del Abismo")'),"muestra feedback causal");
     assert.strictEqual(g.win.eval('dmgTakenMult(mkUnit(1,"melee",0,0))'),0.9,"reduce exactamente 10%");
     g.win.eval('B.duel={resolved:false}');
@@ -1533,6 +1534,7 @@ test("Reliquias 3C-3B: Perla defensiva y Escama del héroe", () => {
     const heroMax=g.win.eval('B.units.find(u=>u.heroId==="leonidas").max');
     const baseMax=g.win.eval('unitStats("champ",F.AG.era,0,F.AG.heroWeaponLv).hp');
     assert.ok(Math.abs(heroMax/baseMax-1.1)<1e-9,"Escama otorga +10% PV máximos");
+    assert.ok(g.win.eval('B.S["1"].relicUses.escama_amaru.contexts.includes("héroe")'),"marca el uso del héroe");
     assert.ok(g.win.eval('(B.banner&&B.banner.txt.includes("Escama de Amaru"))||B.bannerQueue.some(x=>x.txt.includes("Escama de Amaru"))'));
     assert.strictEqual(g.win.eval(`(()=>{Math.random=()=>0.5;const boosted=B.units.find(u=>u.heroId==="leonidas"),plain=mkUnit(1,"champ",F.AG.era,0,F.AG.heroWeaponLv);plain.heroId="leonidas";return heroDuelPower(boosted,"1")===heroDuelPower(plain,"1")})()`),true,"no altera PoderDuelo");
     assert.strictEqual(g.win.eval('F.AG.heroHp'),undefined,"no crea heridas ni PV persistentes");
@@ -1562,6 +1564,7 @@ test("Reliquias 3C-3C: Aliento ofensivo y Ankh tras defensa", async () => {
     g.win.eval('spawnUnit("1","melee");spawnUnit("1","ranged");spawnUnit("1","air");spawnUnit("1","heavy")');
     const boosted=Array.from(g.win.eval('B.units.filter(u=>u.relicDamageBonus).map(u=>u.kind)'));
     assert.deepStrictEqual(boosted,["melee","ranged","air"],"afecta exactamente las primeras tres elegibles");
+    assert.ok(g.win.eval('B.S["1"].relicUses.aliento_long.contexts.includes("ataque")'),"marca el uso ofensivo");
     assert.strictEqual(g.win.eval('B.S["1"].relicOffensiveUnitsRemaining'),0);
     assert.strictEqual(g.win.eval('B.units.find(u=>u.kind==="heavy").relicDamageBonus'),undefined,"la cuarta queda normal");
     assert.ok(Math.abs(g.win.eval('B.units.find(u=>u.kind==="air").dmg/unitStats("air",2,0).dmg')-1.1)<1e-9,"aéreas reciben el mismo 10%, no uno especial");
@@ -1592,6 +1595,7 @@ test("Reliquias 3C-3C: Aliento ofensivo y Ankh tras defensa", async () => {
     assert.strictEqual(g.win.eval('T.CAN.troops'),7,"recupera 3 sobre 20 pérdidas y respeta el máximo");
     assert.strictEqual(g.win.eval('F.AG.ankhUsedRound'),10);
     assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Ankh de Anubis recuperó 3"))'),"feedback causal");
+    assert.strictEqual(g.win.eval('balanceSession.relics.ankh_anubis.uses'),1,"registra el uso real del Ankh");
 
     const saved=g.win.eval('saveGame()');
     g.win.eval('F.AG.ankhUsedRound=null;loadGame('+JSON.stringify(saved)+')');
@@ -1649,6 +1653,44 @@ test("Reliquias 3C-4: elección IA simétrica, causal y persistente", () => {
     assert.strictEqual(g.win.eval(`JSON.stringify(getActiveRelicEffect(currentRelicState(),"SO",{battleType:"normal",role:"attacker",duel:false}))`),
       g.win.eval(`JSON.stringify(getActiveRelicEffect(currentRelicState(),"AG",{battleType:"normal",role:"attacker",duel:false}))`),
       "IA y jugador reciben exactamente el mismo efecto");
+  }finally{closeGame(g);}
+});
+
+/* 42 (Fase 3C-5). Modo Balance mide equipamiento, activación, contexto,
+   resultado y propietario sin ajustar reglas; la ayuda explica 3C. */
+test("Reliquias 3C-5: telemetría pasiva y tutorial completo", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");resetBalanceSession();
+      function relicTelemetryBattle(fac,id,contexts,win=true,retreat=false){
+        const blank={fac:"CO",spawnedTypes:{},damageByType:{},heroSpawned:false,relicUses:{}};
+        const own={fac,relicEquippedId:id,spawnedTypes:{},damageByType:{},heroSpawned:false,relicUses:{}};
+        markBattleRelicUse(own,id,contexts);const b={time:80,S:{"1":own,"-1":blank}};
+        recordBalanceBattle(b,win);recordBalanceRelicBattle(b,win,retreat);
+      }
+      relicTelemetryBattle("AG","perla_abismo",["defensa","costa"],true,false);
+      relicTelemetryBattle("CO","escama_amaru",["ataque","héroe"],false,false);
+      relicTelemetryBattle("AG","aliento_long",["ataque"],false,true);
+      relicTelemetryBattle("CO","ankh_anubis",["defensa","defensa ganada"],true,false);`);
+    const data=JSON.parse(g.win.eval('exportBalanceJSON()')).partida;
+    assert.strictEqual(data.reliquiasEquipadasPorImperio.AG.perla_abismo,1,"registra reliquia equipada por imperio");
+    assert.strictEqual(data.reliquias.perla_abismo.usos,1);
+    assert.strictEqual(data.reliquias.escama_amaru.contextos["héroe"],1);
+    assert.strictEqual(data.reliquias.aliento_long.resultados.retiradas,1);
+    assert.strictEqual(data.reliquias.ankh_anubis.contextos["defensa ganada"],1);
+    assert.strictEqual(data.reliquias.perla_abismo.propietarios.jugador,1,"distingue jugador");
+    assert.strictEqual(data.reliquias.escama_amaru.propietarios.IA,1,"distingue IA");
+    assert.ok(g.win.eval(`(()=>{const d=emptyBalanceData();d.relics.perla_abismo={uses:5,wins:4,losses:1,retreats:0,owners:{jugador:5,IA:0},contexts:{costa:5}};return balanceBenchmarks(d).some(x=>x.includes("parece dominar"))})()`),"solo advierte, no autoajusta");
+
+    const before=g.win.eval('JSON.stringify({relics:RELICS,F:F,T:T})');
+    g.win.eval('renderBalancePanel()');
+    assert.strictEqual(g.win.eval('JSON.stringify({relics:RELICS,F:F,T:T})'),before,"medir y renderizar no cambia balance ni estado");
+    assert.ok(g.doc.getElementById("balanceBody").textContent.includes("reliquiasEquipadasPorImperio"));
+
+    const help=g.doc.getElementById("quickHelp").textContent;
+    for(const text of["slot único","garantiza su reliquia base","efectos no se acumulan","Perla del Abismo","Escama de Amaru","Aliento del Long","Ankh de Anubis"])
+      assert.ok(help.includes(text),`la ayuda debe mencionar: ${text}`);
+    assert.ok(help.includes("Rarezas, combos")&&help.includes("segundo slot no existen actualmente"));
   }finally{closeGame(g);}
 });
 

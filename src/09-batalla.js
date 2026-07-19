@@ -199,11 +199,14 @@ function openBattle(from,to,mode){
   };
   for(const side of["1","-1"]){
     const S=B.S[side],role=S.fac===defT.owner?"defender":"attacker";
+    const equipped=getEquippedRelic(currentRelicState(),S.fac);
+    S.relicRole=role;S.relicEquippedId=equipped&&equipped.id;S.relicUses={};
     const effect=getActiveRelicEffect(currentRelicState(),S.fac,
       {battleType:"normal",role,territoryId:to,duel:false});
     S.relicDamageTakenMult=effect&&effect.type==="coastal_defense_damage_reduction"?1-effect.value:1;
     S.relicOffensiveEffect=effect&&effect.type==="first_offensive_units_damage"?effect:null;
     S.relicOffensiveUnitsRemaining=S.relicOffensiveEffect?S.relicOffensiveEffect.unitCount:0;
+    if(S.relicDamageTakenMult<1)markBattleRelicUse(S,"perla_abismo",["defensa","costa"]);
   }
   // Bases +15% PV (Fase 2C) respecto al balance anterior.
   if(mode==="attack"){
@@ -248,6 +251,8 @@ function openBossBattle(empireId,originId){
     stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
     last:performance.now(),S:{"1":bossSideState(empireId,80,9+f.upEco*1.4),"-1":bossSideState(empireId,0,0)},
     eCool:0,turretT:0};
+  const bossRelic=getEquippedRelic(currentRelicState(),empireId);
+  B.S["1"].relicEquippedId=bossRelic&&bossRelic.id;B.S["1"].relicUses={};
   $("battle").classList.add("bossBattle");
   $("btitle").textContent=`BATALLA DE JEFE · ${monster.name}`;
   $("bnameP").textContent=fname(empireId)+" · "+ERAS[f.era];
@@ -275,6 +280,7 @@ function spawnUnit(side,kind){
   const longEffect=P.relicOffensiveEffect;
   if(!B.duel&&longEffect&&P.relicOffensiveUnitsRemaining>0&&!longEffect.exclude.includes(kind)){
     u.dmg*=1+longEffect.value;u.relicDamageBonus=longEffect.value;P.relicOffensiveUnitsRemaining--;
+    markBattleRelicUse(P,"aliento_long",["ataque"]);
     if(!P.relicOffensiveAnnounced){P.relicOffensiveAnnounced=true;
       pushBanner("◆ Aliento del Long impulsa la primera oleada","#8EC5FF",3.5,"Primeras 3 unidades ofensivas: +10% daño");}
   }
@@ -294,6 +300,7 @@ function spawnChamp(side){
     {battleType:B.mode==="boss"?"boss":"normal",role:"hero",territoryId:B.to,duel:false});
   if(relicEffect&&relicEffect.type==="hero_max_hp"){
     u.relicBaseMax=u.max;u.max*=1+relicEffect.value;u.hp=u.max;
+    markBattleRelicUse(P,"escama_amaru",[P.relicRole||"ataque","héroe"]);
     pushBanner("◆ Escama de Amaru fortalece al héroe","#7ED66E",3.5,"+10% PV máximos durante esta batalla");
   }
   if(heroArmaAltActiva(P.fac,heroId)){ // arma alternativa desbloqueada (logro por partida)
@@ -1112,6 +1119,7 @@ function finishBattle(win,retreat=false){
         {battleType:"normal",role:"defender",won:true,duel:false,round,
           troopsBefore:B.defenderTroopsStart,troopsAfter});
       if(recovered>0){T[to].troops=Math.min(B.defenderTroopsStart,T[to].troops+recovered);
+        const side=Object.keys(B.S).find(key=>B.S[key].fac===defenderId);if(side)markBattleRelicUse(B.S[side],"ankh_anubis",["defensa","defensa ganada"]);
         logCausal(`◆ Ankh de Anubis recuperó ${recovered} ${recovered===1?"tropa":"tropas"} de ${fname(defenderId)} tras defender ${TERR[to].n}.`,"win");}
       return recovered;
     }
@@ -1145,6 +1153,7 @@ function finishBattle(win,retreat=false){
         log(`${fname(me)} perdió ${TERR[to].n} ante ${fname(foe)}.`,"loss");
       }
     }
+    recordBalanceRelicBattle(B,win,retreat);
     $("battle").style.display="none";
     B=null;inBattle=false;
     render();

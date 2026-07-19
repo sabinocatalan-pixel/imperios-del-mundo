@@ -6,11 +6,11 @@ let balanceEnabled=false,balanceTitleTaps=0,balanceSession=null;
 
 function emptyBalanceData(){return{
   battles:{count:0,durationTotal:0},units:{},heroes:{},damage:{},wins:{},
-  games:{count:0,durationTotal:0},difficulty:{},events:{},duels:{}
+  games:{count:0,durationTotal:0},difficulty:{},events:{},duels:{},relics:{},relicEquipment:{}
 };}
 function normalizeBalanceData(d){
   const b=d&&typeof d==="object"?d:emptyBalanceData();
-  for(const k of["battles","units","heroes","damage","wins","games","difficulty","events","duels"])
+  for(const k of["battles","units","heroes","damage","wins","games","difficulty","events","duels","relics","relicEquipment"])
     if(!b[k]||typeof b[k]!=="object")b[k]=emptyBalanceData()[k];
   b.battles.count=b.battles.count|0;b.battles.durationTotal=+b.battles.durationTotal||0;
   b.games.count=b.games.count|0;b.games.durationTotal=+b.games.durationTotal||0;
@@ -22,6 +22,14 @@ function saveBalanceSession(){try{localStorage.setItem(BALANCE_SESSION_KEY,JSON.
 function resetBalanceSession(){balanceSession=emptyBalanceData();balanceSession.startedAt=Date.now();saveBalanceSession();}
 function balancePair(box,key){if(!box[key])box[key]={uses:0,wins:0};return box[key];}
 function balanceDamage(box,key){if(!box[key])box[key]={total:0,samples:0};return box[key];}
+function balanceRelic(box,key){if(!box[key])box[key]={uses:0,wins:0,losses:0,retreats:0,owners:{jugador:0,IA:0},contexts:{}};return box[key];}
+function markBattleRelicUse(sideState,relicId,contexts=[]){
+  if(!sideState||!relicId)return false;
+  if(!sideState.relicUses)sideState.relicUses={};
+  const use=sideState.relicUses[relicId]||(sideState.relicUses[relicId]={contexts:[]});
+  for(const context of contexts)if(!use.contexts.includes(context))use.contexts.push(context);
+  return true;
+}
 function addBattleTelemetry(data,b,win){
   data.battles.count++;data.battles.durationTotal+=Math.max(0,+b.time||0);
   for(const side of["1","-1"]){
@@ -32,10 +40,29 @@ function addBattleTelemetry(data,b,win){
       dm.total+=amount;dm.samples++;
     }
     if(S.heroSpawned){const id=F[S.fac].heroes[0]||"sin-heroe",x=balancePair(data.heroes,id);x.uses++;if(sideWon)x.wins++;}
+    if(S.relicEquippedId){
+      if(!data.relicEquipment[S.fac])data.relicEquipment[S.fac]={};
+      data.relicEquipment[S.fac][S.relicEquippedId]=(data.relicEquipment[S.fac][S.relicEquippedId]||0)+1;
+    }
   }
 }
 function recordBalanceBattle(b,win){
   if(!b)return;const total=loadBalanceTotal();addBattleTelemetry(balanceSession,b,win);addBattleTelemetry(total,b,win);saveBalanceSession();saveBalanceTotal(total);renderBalancePanel();
+}
+function addRelicBattleTelemetry(data,b,win,retreat){
+  for(const side of["1","-1"]){
+    const S=b.S[side],sideWon=(side==="1")===win,owner=humans.includes(S.fac)?"jugador":"IA";
+    for(const[relicId,use]of Object.entries(S.relicUses||{})){
+      const x=balanceRelic(data.relics,relicId),result=retreat&&side==="1"?"retirada":(sideWon?"victoria":"derrota");
+      x.uses++;x.owners[owner]++;x[result==="victoria"?"wins":result==="retirada"?"retreats":"losses"]++;
+      for(const context of use.contexts||[])x.contexts[context]=(x.contexts[context]||0)+1;
+    }
+  }
+}
+function recordBalanceRelicBattle(b,win,retreat=false){
+  if(!b)return;const total=loadBalanceTotal();
+  addRelicBattleTelemetry(balanceSession,b,win,retreat);addRelicBattleTelemetry(total,b,win,retreat);
+  saveBalanceSession();saveBalanceTotal(total);renderBalancePanel();
 }
 function recordBalanceEvent(type){
   if(!balanceSession)return;balanceSession.events[type]=(balanceSession.events[type]||0)+1;
@@ -65,7 +92,11 @@ function balanceView(data){
     danoMedioPorTipo:Object.fromEntries(Object.entries(data.damage).map(([k,v])=>[k,v.samples?+(v.total/v.samples).toFixed(2):0])),
     victoriasPorImperioDificultad:data.wins,
     duracionMediaPartida:data.games.count?+(data.games.durationTotal/data.games.count).toFixed(2):0,
-    partidas:data.games.count,resultadosPorDificultad:data.difficulty,eventosMasFrecuentes:data.events,duelosPorHeroe:rates(data.duels)
+    partidas:data.games.count,resultadosPorDificultad:data.difficulty,eventosMasFrecuentes:data.events,duelosPorHeroe:rates(data.duels),
+    reliquiasEquipadasPorImperio:data.relicEquipment,
+    reliquias:Object.fromEntries(Object.entries(data.relics).map(([id,x])=>[id,{usos:x.uses,
+      tasaVictoria:x.uses?+(x.wins/x.uses).toFixed(3):0,resultados:{victorias:x.wins,derrotas:x.losses,retiradas:x.retreats},
+      propietarios:x.owners,contextos:x.contexts}]))
   };
 }
 function balanceBenchmarks(data){
@@ -75,6 +106,8 @@ function balanceBenchmarks(data){
   for(const[k,x]of Object.entries(v.duelosPorHeroe))if(x.uso&&x.tasaVictoria>0.65)reports.push(`${k} supera 65% de victorias en duelo`);
   const nightmare=v.resultadosPorDificultad.Pesadilla;
   if(nightmare&&nightmare.games&&nightmare.playerWins/nightmare.games>=0.35)reports.push("Pesadilla alcanza o supera 35% de victorias");
+  for(const[id,x]of Object.entries(v.reliquias))if(x.usos>=5&&x.tasaVictoria>=0.65)
+    reports.push(`${getRelicById(id)?getRelicById(id).name:id} parece dominar (${Math.round(x.tasaVictoria*100)}% en ${x.usos} usos)`);
   return reports;
 }
 function exportBalanceJSON(){

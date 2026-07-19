@@ -84,16 +84,16 @@ function mkBtn(txt,fn,dis=false,cls="",preserveRelicWindow=false){
 }
 function renderRelicPanel(fid){
   const state=currentRelicState(),owned=getEmpireRelics(state,fid),equipped=getEquippedRelic(state,fid);
-  if(!owned.length)return`<section class="relicPanel" id="relicPanel"><b>◆ Reliquia equipada · 1 slot</b>
-    <div class="relicEmpty">Aún no posees reliquias. Derrota una amenaza mítica para obtener una.</div></section>`;
-  return`<section class="relicPanel" id="relicPanel"><b>◆ Reliquia equipada · 1 slot</b>
+  if(!owned.length)return`<section class="relicPanel" id="relicPanel"><b>◆ Reliquia equipada · slot único</b>
+    <div class="relicEmpty">Aún no posees reliquias. Vencer una amenaza mítica garantiza su reliquia base.</div></section>`;
+  return`<section class="relicPanel" id="relicPanel"><b>◆ Reliquia equipada · slot único</b>
     <div class="relicSlot">${equipped?equipped.name:"— slot vacío —"}</div>
     ${owned.map(relic=>`<article class="relicCard ${equipped&&equipped.id===relic.id?"equipped":""}" data-relic-id="${relic.id}">
       <strong>${relic.name}</strong>${equipped&&equipped.id===relic.id?" · Equipada":""}<br>
       <span>${relic.description}</span><br><small>${relic.restriction}</small><br>
       <small class="relicEffectStatus">${relic.effectReady?"Efecto activo al equipar":"Efecto en preparación"}</small>
     </article>`).join("")}
-    ${owned.some(relic=>!relic.effectReady)?`<div class="relicPending">Efectos todavía en preparación: Aliento y Ankh.</div>`:""}
+    <div class="relicChangeNote">Un solo efecto a la vez · cambia al inicio del turno.</div>
   </section>`;
 }
 function renderEmp(){
