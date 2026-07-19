@@ -1694,6 +1694,23 @@ test("Reliquias 3C-5: telemetría pasiva y tutorial completo", () => {
   }finally{closeGame(g);}
 });
 
+/* 43 (QA 3C-6). La ruta rápida de reclutamiento básico de la IA
+   conserva el mismo Aliento del Long que spawnUnit(). */
+test("QA 3C-6: Aliento también potencia unidades básicas de IA", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");monsterState.rewards=[getMonsterReward("long","CO","CHN",8)];
+      F.CO.equippedRelic="aliento_long";T.CAN.owner="AG";T.EUN.owner="CO";openBattle("EUN","CAN","defense");
+      B.S["-1"].gold=999;B.S["-1"].cool.spec=99;B.S["-1"].cool.champ=99;B.S["-1"].cool.siege=99;B.eCool=0;
+      Math.random=()=>0;enemyAI(0.1);`);
+    const unit=g.win.eval('B.units.find(u=>u.side===-1&&["melee","ranged","heavy"].includes(u.kind))');
+    assert.ok(unit,"la IA recluta una unidad básica");
+    assert.strictEqual(unit.relicDamageBonus,0.10,"recibe el mismo +10% del jugador");
+    assert.strictEqual(g.win.eval('B.S["-1"].relicOffensiveUnitsRemaining'),2,"consume una de las tres cargas");
+    assert.ok(g.win.eval('B.S["-1"].relicUses.aliento_long.contexts.includes("ataque")'),"registra la activación IA");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

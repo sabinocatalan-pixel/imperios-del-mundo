@@ -264,6 +264,15 @@ function openBossBattle(empireId,originId){
   return true;
 }
 
+function applyOffensiveRelicToUnit(P,u,kind){
+  const longEffect=P.relicOffensiveEffect;
+  if(B.duel||!longEffect||P.relicOffensiveUnitsRemaining<=0||longEffect.exclude.includes(kind))return u;
+  u.dmg*=1+longEffect.value;u.relicDamageBonus=longEffect.value;P.relicOffensiveUnitsRemaining--;
+  markBattleRelicUse(P,"aliento_long",["ataque"]);
+  if(!P.relicOffensiveAnnounced){P.relicOffensiveAnnounced=true;
+    pushBanner("◆ Aliento del Long impulsa la primera oleada","#8EC5FF",3.5,"Primeras 3 unidades ofensivas: +10% daño");}
+  return u;
+}
 function spawnUnit(side,kind){
   const P=B.S[side],f=F[P.fac];
   if((kind==="healer"||kind==="siege")&&B.units.filter(u=>u.side===(+side)&&u.kind===kind).length>=2)return;
@@ -276,14 +285,7 @@ function spawnUnit(side,kind){
   if(f.heroes[0]==="suntzu"&&P.champAlive)cost=Math.round(cost*0.9); // Sun Tzu: -10% costo mientras vive
   if(B.over||P.gold<cost||P.cool[kind]>0)return;
   P.gold-=cost;P.cool[kind]=st.cd;SFX.spawn();
-  const u=mkUnit(+side,kind,f.era,f.upArm);
-  const longEffect=P.relicOffensiveEffect;
-  if(!B.duel&&longEffect&&P.relicOffensiveUnitsRemaining>0&&!longEffect.exclude.includes(kind)){
-    u.dmg*=1+longEffect.value;u.relicDamageBonus=longEffect.value;P.relicOffensiveUnitsRemaining--;
-    markBattleRelicUse(P,"aliento_long",["ataque"]);
-    if(!P.relicOffensiveAnnounced){P.relicOffensiveAnnounced=true;
-      pushBanner("◆ Aliento del Long impulsa la primera oleada","#8EC5FF",3.5,"Primeras 3 unidades ofensivas: +10% daño");}
-  }
+  const u=applyOffensiveRelicToUnit(P,mkUnit(+side,kind,f.era,f.upArm),kind);
   if(B.pacing.desgaste){u.hp*=0.9;u.max*=0.9;} // desgaste (180s): refuerzos con -10% PV máx
   P.spawnedTypes[kind]=(P.spawnedTypes[kind]||0)+1;
   applyVeterancy(u,kind,veteranLevel((f.veterancy&&f.veterancy[kind]?f.veterancy[kind].xp:0)));
@@ -501,7 +503,7 @@ function enemyAI(dt){
   }
   P.gold-=unitStats(pick,eF.era,eF.upArm).cost;
   B.eCool=0.7+Math.random()*0.9;
-  B.units.push(mkUnit(-1,pick,eF.era,eF.upArm));
+  B.units.push(applyOffensiveRelicToUnit(P,mkUnit(-1,pick,eF.era,eF.upArm),pick));
 }
 function bossNormalAttack(dt){
   if(B.mode!=="boss"||B.over)return;
