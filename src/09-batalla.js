@@ -83,6 +83,7 @@ function counterMult(att,def){
 function dmgTakenMult(tgt){
   const S=B.S[String(tgt.side)],f=F[S.fac],heroId=f.heroes[0];
   let mult=1;
+  if(!B.duel&&S.relicDamageTakenMult)mult*=S.relicDamageTakenMult;
   if(S.defBuffT>0)mult*=0.9; // Pachacútec: Reorganización Imperial (10s)
   if(heroId==="leonidas"&&S.champAlive&&tgt.kind==="melee")mult*=0.9; // Muro de Escudos
   if(tgt.vetDefMult)mult*=tgt.vetDefMult;
@@ -196,6 +197,12 @@ function openBattle(from,to,mode){
     },
     eCool:0,turretT:0
   };
+  for(const side of["1","-1"]){
+    const S=B.S[side],role=S.fac===defT.owner?"defender":"attacker";
+    const effect=getActiveRelicEffect(currentRelicState(),S.fac,
+      {battleType:"normal",role,territoryId:to,duel:false});
+    S.relicDamageTakenMult=effect&&effect.type==="coastal_defense_damage_reduction"?1-effect.value:1;
+  }
   // Bases +15% PV (Fase 2C) respecto al balance anterior.
   if(mode==="attack"){
     B.pHP=B.pMax=(330+pFac.upArm*40)*1.15;
@@ -211,6 +218,8 @@ function openBattle(from,to,mode){
   $("bnameE").textContent=fname(eFacId)+" · "+ERAS[eFac.era];
   $("bmode").textContent=pvp?"👥 ¡Duelo de jugadores!":(mode==="attack"?"⚔️ Ofensiva":"🛡️ ¡Defiende tu territorio!");
   buildBattleButtons();
+  const pearlSide=["1","-1"].find(side=>B.S[side].relicDamageTakenMult<1);
+  if(pearlSide)pushBanner("◆ Perla del Abismo protege la defensa costera","#7ED6D6",3.5,"Unidades defensoras reciben 10% menos daño");
   $("battle").style.display="flex";
   requestAnimationFrame(()=>{fitBattleCanvas();B.last=performance.now();requestAnimationFrame(bloop);});
 }
@@ -273,6 +282,12 @@ function spawnChamp(side){
   P.cool.champ=60;P.champAlive=true;P.heroSpawned=true;SFX.evolve();
   const u=mkUnit(+side,"champ",f.era,0,f.heroWeaponLv);
   u.heroId=heroId;
+  const relicEffect=getActiveRelicEffect(currentRelicState(),P.fac,
+    {battleType:B.mode==="boss"?"boss":"normal",role:"hero",territoryId:B.to,duel:false});
+  if(relicEffect&&relicEffect.type==="hero_max_hp"){
+    u.relicBaseMax=u.max;u.max*=1+relicEffect.value;u.hp=u.max;
+    pushBanner("◆ Escama de Amaru fortalece al héroe","#7ED66E",3.5,"+10% PV máximos durante esta batalla");
+  }
   if(heroArmaAltActiva(P.fac,heroId)){ // arma alternativa desbloqueada (logro por partida)
     if(heroId==="leonidas")u.rng+=30;
     else if(heroId==="anibal")u.rng=120;

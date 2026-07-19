@@ -90,9 +90,10 @@ function renderRelicPanel(fid){
     <div class="relicSlot">${equipped?equipped.name:"— slot vacío —"}</div>
     ${owned.map(relic=>`<article class="relicCard ${equipped&&equipped.id===relic.id?"equipped":""}" data-relic-id="${relic.id}">
       <strong>${relic.name}</strong>${equipped&&equipped.id===relic.id?" · Equipada":""}<br>
-      <span>${relic.description}</span><br><small>${relic.restriction}</small>
+      <span>${relic.description}</span><br><small>${relic.restriction}</small><br>
+      <small class="relicEffectStatus">${relic.effectReady?"Efecto activo al equipar":"Efecto en preparación"}</small>
     </article>`).join("")}
-    <div class="relicPending">Efectos todavía en preparación; equipar no modifica estadísticas.</div>
+    ${owned.some(relic=>!relic.effectReady)?`<div class="relicPending">Efectos todavía en preparación: Aliento y Ankh.</div>`:""}
   </section>`;
 }
 function renderEmp(){

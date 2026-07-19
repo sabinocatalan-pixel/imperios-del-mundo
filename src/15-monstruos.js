@@ -40,21 +40,21 @@ const MONSTERS={
   }
 };
 
-/* Fase 3C-1: catálogo declarativo. Los efectos permanecen inertes hasta
-   que una fase posterior implemente equipamiento y combate. */
+/* Catálogo declarativo de 3C. Las recompensas permanecen inertes mientras
+   no estén equipadas; effectReady indica qué efectos ya tienen ejecución. */
 const RELICS={
   perla_abismo:{
     id:"perla_abismo",name:"Perla del Abismo",sourceMonster:"kraken",rewardId:"fragmento_abismo",
     description:"Una perla nacida de las profundidades dominadas por el Kraken.",
     effect:{type:"coastal_defense_damage_reduction",value:0.10},
-    restriction:"Solo al defender un territorio costero.",inertUntilEquipped:true,
+    restriction:"Solo al defender un territorio costero.",inertUntilEquipped:true,effectReady:true,
     help:"Reduce un 10% el daño recibido al defender una costa cuando está equipada."
   },
   escama_amaru:{
     id:"escama_amaru",name:"Escama de Amaru",sourceMonster:"amaru",rewardId:"escama_amaru",
     description:"Una escama legendaria que transmite la resistencia del Amaru.",
     effect:{type:"hero_max_hp",value:0.10},
-    restriction:"Solo durante la batalla; no afecta duelos.",inertUntilEquipped:true,
+    restriction:"Solo durante batalla normal; no afecta duelos ni jefes.",inertUntilEquipped:true,effectReady:true,
     help:"Otorga un 10% más de PV máximos al héroe desplegado cuando está equipada."
   },
   aliento_long:{
@@ -146,9 +146,10 @@ function equipRelic(state,empireId,relicId){
   if(!canChangeRelic(parts,empireId)||!relic||!ownsRelic(parts,empireId,relicId))return false;
   const previous=getEquippedRelic(parts,empireId);
   parts.factions[empireId].equippedRelic=relicId;
+  const status=relic.effectReady?"Su efecto se aplicará en el contexto indicado.":"Su efecto aún está en preparación.";
   relicChangeFeedback(state,previous&&previous.id!==relicId
-    ?`Cambiaste ${previous.name} por ${relic.name}. Sus efectos aún están inactivos.`
-    :`Equipaste ${relic.name}. Sus efectos aún están inactivos.`);
+    ?`Cambiaste ${previous.name} por ${relic.name}. ${status}`
+    :`Equipaste ${relic.name}. ${status}`);
   return true;
 }
 function unequipRelic(state,empireId){
@@ -157,6 +158,26 @@ function unequipRelic(state,empireId){
   parts.factions[empireId].equippedRelic=null;
   relicChangeFeedback(state,`Retiraste ${previous.name}.`);
   return true;
+}
+
+/* Fase 3C-3B: resolución contextual de efectos ya implementados. Aliento
+   y Ankh quedan fuera y no pueden activarse todavía. */
+function hasEquippedRelic(state,empireId,relicId){
+  const parts=relicStateParts(state),faction=parts.factions[empireId];
+  return !!(faction&&faction.equippedRelic===relicId&&ownsRelic(parts,empireId,relicId));
+}
+function isCoastalTerritory(territoryId){return SEAROUTES.some(route=>route.includes(territoryId));}
+function getActiveRelicEffect(state,empireId,context={}){
+  const equipped=getEquippedRelic(state,empireId);
+  if(!equipped||!equipped.effectReady||!hasEquippedRelic(state,empireId,equipped.id))return null;
+  if(equipped.id==="perla_abismo"){
+    return context.battleType==="normal"&&context.role==="defender"&&!context.duel&&
+      isCoastalTerritory(context.territoryId)?equipped.effect:null;
+  }
+  if(equipped.id==="escama_amaru"){
+    return context.battleType==="normal"&&context.role==="hero"&&!context.duel?equipped.effect:null;
+  }
+  return null;
 }
 
 function emptyMonsterState(){return{active:null,defeated:{},rewards:[]};}

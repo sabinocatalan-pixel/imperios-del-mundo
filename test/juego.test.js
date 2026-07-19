@@ -1501,6 +1501,56 @@ test("Claridad UI: habilidades de héroes y reliquias propias", () => {
   }finally{closeGame(g);}
 });
 
+/* 39 (Fase 3C-3B). Perla y Escama aplican únicamente sus contextos
+   aprobados; Aliento y Ankh permanecen sin efecto. */
+test("Reliquias 3C-3B: Perla defensiva y Escama del héroe", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");
+      function closeRelicBattle(){if(B)B.over=true;B=null;inBattle=false;document.getElementById("battle").style.display="none";}
+      monsterState.rewards=[getMonsterReward("kraken","AG","CAN",8)];F.AG.equippedRelic="perla_abismo";`);
+
+    g.win.eval('T.CAN.owner="AG";T.EUN.owner="CO";openBattle("EUN","CAN","defense")');
+    assert.strictEqual(g.win.eval('B.S["1"].relicDamageTakenMult'),0.9,"Perla protege al defensor costero");
+    assert.ok(g.win.eval('B.banner&&B.banner.txt.includes("Perla del Abismo")'),"muestra feedback causal");
+    assert.strictEqual(g.win.eval('dmgTakenMult(mkUnit(1,"melee",0,0))'),0.9,"reduce exactamente 10%");
+    g.win.eval('B.duel={resolved:false}');
+    assert.strictEqual(g.win.eval('dmgTakenMult(mkUnit(1,"melee",0,0))'),1,"no interviene durante duelo");
+    g.win.eval('closeRelicBattle();openBattle("CAN","EUN","attack")');
+    assert.strictEqual(g.win.eval('B.S["1"].relicDamageTakenMult'),1,"no protege al atacar");
+
+    g.win.eval('closeRelicBattle();T.PER.owner="AG";T.BRA.owner="CO";openBattle("BRA","PER","defense")');
+    assert.strictEqual(g.win.eval('isCoastalTerritory("PER")'),false);
+    assert.strictEqual(g.win.eval('B.S["1"].relicDamageTakenMult'),1,"no protege territorio interior");
+    assert.strictEqual(g.win.eval('getActiveRelicEffect(currentRelicState(),"AG",{battleType:"boss",role:"defender",territoryId:"CAN"})'),null,"no funciona en boss");
+
+    g.win.eval(`closeRelicBattle();monsterState.rewards=[getMonsterReward("kraken","SO","CAN",8)];
+      F.AG.equippedRelic="perla_abismo";T.CAN.owner="AG";T.EUN.owner="CO";openBattle("EUN","CAN","defense")`);
+    assert.strictEqual(g.win.eval('B.S["1"].relicDamageTakenMult'),1,"una reliquia ajena no aplica");
+
+    g.win.eval(`closeRelicBattle();monsterState.rewards=[getMonsterReward("amaru","AG","PER",8)];
+      F.AG.equippedRelic="escama_amaru";F.AG.heroes[0]="leonidas";T.CAN.owner="AG";T.EUN.owner="CO";
+      openBattle("CAN","EUN","attack");spawnChamp("1")`);
+    const heroMax=g.win.eval('B.units.find(u=>u.heroId==="leonidas").max');
+    const baseMax=g.win.eval('unitStats("champ",F.AG.era,0,F.AG.heroWeaponLv).hp');
+    assert.ok(Math.abs(heroMax/baseMax-1.1)<1e-9,"Escama otorga +10% PV máximos");
+    assert.ok(g.win.eval('(B.banner&&B.banner.txt.includes("Escama de Amaru"))||B.bannerQueue.some(x=>x.txt.includes("Escama de Amaru"))'));
+    assert.strictEqual(g.win.eval(`(()=>{Math.random=()=>0.5;const boosted=B.units.find(u=>u.heroId==="leonidas"),plain=mkUnit(1,"champ",F.AG.era,0,F.AG.heroWeaponLv);plain.heroId="leonidas";return heroDuelPower(boosted,"1")===heroDuelPower(plain,"1")})()`),true,"no altera PoderDuelo");
+    assert.strictEqual(g.win.eval('F.AG.heroHp'),undefined,"no crea heridas ni PV persistentes");
+
+    g.win.eval(`closeRelicBattle();monsterState.active=createMonsterState("kraken","CAN",6,0);round=6;T.CAN.owner="AG";T.CAN.troops=12;
+      openBossBattle("AG","CAN");spawnChamp("1")`);
+    assert.ok(Math.abs(g.win.eval('B.units.find(u=>u.heroId==="leonidas").max')-baseMax)<1e-9,"Escama no funciona en boss");
+
+    g.win.eval(`closeRelicBattle();monsterState.active=null;monsterState.rewards=[
+      getMonsterReward("long","AG","CHN",8),getMonsterReward("anubis","AG","MAG",9)];
+      F.AG.equippedRelic="aliento_long";`);
+    assert.strictEqual(g.win.eval('getActiveRelicEffect(currentRelicState(),"AG",{battleType:"normal",role:"attacker",territoryId:"EUN"})'),null);
+    g.win.eval('F.AG.equippedRelic="ankh_anubis"');
+    assert.strictEqual(g.win.eval('getActiveRelicEffect(currentRelicState(),"AG",{battleType:"normal",role:"defender",territoryId:"CAN"})'),null,"Aliento y Ankh siguen inactivos");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
