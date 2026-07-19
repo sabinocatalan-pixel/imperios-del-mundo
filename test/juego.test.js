@@ -569,7 +569,7 @@ test("Resumen del turno: se genera con máx. 6 líneas causales", async () => {
     g.win.eval('clickTerr("CAN")'); // player = AG
 
     // Simula 8 eventos causales en la misma ronda (más del límite de 6).
-    g.win.eval('for(let i=0;i<8;i++) logCausal("evento de prueba "+i);');
+    g.win.eval('turnSummaryLines=[];for(let i=0;i<8;i++) logCausal("evento de prueba "+i);');
     assert.strictEqual(g.win.eval('turnSummaryLines.length'), 8, "logCausal debe seguir registrando todos, el recorte es solo al mostrar");
 
     g.win.eval('showTurnSummary()');
@@ -585,7 +585,8 @@ test("Resumen del turno: se genera con máx. 6 líneas causales", async () => {
     // Se reinicia al empezar una ronda nueva.
     g.win.eval('Math.random=()=>0.99;'); // evita que una plaga al azar contamine el conteo
     g.win.eval('turnSummaryLines=["algo"]; startRound();');
-    assert.strictEqual(g.win.eval('turnSummaryLines.length'), 0);
+    assert.strictEqual(g.win.eval('turnSummaryLines.some(x=>(x.m||x)==="algo")'),false,"el contenido de la ronda anterior se elimina");
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Subsistencia")||x.m.includes("Escasez"))'),"la ronda nueva registra su economía causal");
   } finally { closeGame(g); }
 });
 
@@ -1985,6 +1986,64 @@ test("Recursos 3D-2: reclutamiento limitado, simétrico y persistente", () => {
 
     g.win.eval('recruitmentState.byEmpire.AG=2;recruitmentState.byTerritory.CAN=1;round++;startRound()');
     assert.strictEqual(g.win.eval('recruitmentState.round'),g.win.eval('round'));assert.deepStrictEqual(Object.keys(g.win.eval('recruitmentState.byEmpire')),[],"nueva ronda reinicia límites");
+  }finally{closeGame(g);}
+});
+
+/* 50 (Fase 3D-3). Subsistencia y crecimiento automático limitado aplican
+   las mismas reglas a cualquier imperio sin hambre ni mantenimiento. */
+test("Recursos 3D-3: subsistencia y crecimiento poblacional limitado", () => {
+  const g=makeGame();
+  try{
+    assert.deepStrictEqual(JSON.parse(g.win.eval('JSON.stringify(POPULATION_GROWTH)')),
+      {subsistencePerTerritory:1,growthFoodCost:4,territoriesPerSlot:3,territoryCap:40});
+    g.win.eval(`function growthFixture(count,food=100,owner="AG"){
+      const territories={};for(let i=0;i<count;i++)territories[String.fromCharCode(65+i)]={owner,pop:10,troops:1,base:0,plague:0};
+      return{T:territories,F:{[owner]:{food}}};
+    }`);
+    assert.strictEqual(g.win.eval('getFoodSubsistenceCost(growthFixture(3),"AG")'),3);
+    assert.strictEqual(g.win.eval('getMaxPopulationGrowthSlots(growthFixture(1),"AG")'),1);
+    assert.strictEqual(g.win.eval('getMaxPopulationGrowthSlots(growthFixture(3),"AG")'),1);
+    assert.strictEqual(g.win.eval('getMaxPopulationGrowthSlots(growthFixture(4),"AG")'),2);
+    assert.strictEqual(g.win.eval('getMaxPopulationGrowthSlots(growthFixture(6),"AG")'),2);
+    assert.strictEqual(g.win.eval('getMaxPopulationGrowthSlots(growthFixture(7),"AG")'),3);
+    assert.strictEqual(g.win.eval('getMaxPopulationGrowthSlots(growthFixture(9),"AG")'),3);
+
+    const scarce=JSON.parse(g.win.eval(`JSON.stringify((()=>{const s=growthFixture(3,2),before=Object.values(s.T).map(t=>t.pop);
+      const result=applyPopulationGrowth(s,"AG");return{result,food:s.F.AG.food,before,after:Object.values(s.T).map(t=>t.pop)}})())`));
+    assert.strictEqual(scarce.result.scarcity,true);assert.strictEqual(scarce.result.paidSubsistence,2);
+    assert.strictEqual(scarce.food,0);assert.deepStrictEqual(scarce.after,scarce.before,"escasez no quita población");
+    assert.strictEqual(scarce.result.growth,0,"escasez detiene crecimiento");
+
+    const enough=JSON.parse(g.win.eval(`JSON.stringify((()=>{const s=growthFixture(3,7);s.T.A.pop=9;s.T.B.pop=11;s.T.C.pop=12;
+      const result=applyPopulationGrowth(s,"AG");return{result,food:s.F.AG.food,pops:Object.fromEntries(Object.entries(s.T).map(([id,t])=>[id,t.pop]))}})())`));
+    assert.strictEqual(enough.result.growth,1);assert.strictEqual(enough.food,0,"cobra 3 de subsistencia y 4 de crecimiento");
+    assert.deepStrictEqual(enough.pops,{A:10,B:11,C:12},"crece primero la menor población");
+
+    const baseTie=JSON.parse(g.win.eval(`JSON.stringify((()=>{const s=growthFixture(3,7);s.T.A.base=0;s.T.B.base=1;
+      const result=applyPopulationGrowth(s,"AG");return{ids:result.growthIds,pops:Object.fromEntries(Object.entries(s.T).map(([id,t])=>[id,t.pop]))}})())`));
+    assert.deepStrictEqual(baseTie.ids,["B"],"en empate prioriza base");assert.strictEqual(baseTie.pops.B,11);
+    assert.deepStrictEqual(JSON.parse(g.win.eval(`JSON.stringify((()=>{const s=growthFixture(3,7);return getPopulationGrowthPlan(s,"AG").growthIds})())`)),["A"],"empate final usa id estable");
+
+    const slots=JSON.parse(g.win.eval(`JSON.stringify((()=>{const out={};for(const n of[3,6,9]){const s=growthFixture(n,100),r=applyPopulationGrowth(s,"AG");out[n]=r.growth;}return out})())`));
+    assert.deepStrictEqual(slots,{3:1,6:2,9:3},"respeta máximo por bloques de tres territorios");
+
+    const capped=JSON.parse(g.win.eval(`JSON.stringify((()=>{const s=growthFixture(3,20);s.T.A.pop=40;s.T.B.pop=39;s.T.C.pop=41;
+      const result=applyPopulationGrowth(s,"AG");return{result,pops:Object.fromEntries(Object.entries(s.T).map(([id,t])=>[id,t.pop]))}})())`));
+    assert.strictEqual(capped.pops.A,40);assert.strictEqual(capped.pops.B,40);assert.strictEqual(capped.pops.C,41,"save antiguo sobre 40 no se recorta");
+    assert.strictEqual(capped.result.cappedTerritories,2);
+
+    const ai=JSON.parse(g.win.eval(`JSON.stringify((()=>{const s=growthFixture(4,20,"CO"),r=applyPopulationGrowth(s,"CO");return{r,food:s.F.CO.food,pops:Object.values(s.T).map(t=>t.pop)}})())`));
+    assert.strictEqual(ai.r.growth,2,"IA usa exactamente la misma función");assert.strictEqual(ai.food,8);
+
+    g.win.eval(`turnSummaryLines=[];const s=growthFixture(2,1);const r=applyPopulationGrowth(s,"AG");
+      if(r.scarcity)logCausal("⚠ Escasez: crecimiento detenido","loss")`);
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Escasez")&&x.m.includes("detenido"))'));
+
+    // Compatibilidad: reclutamiento 3D-2 y save v7 permanecen vigentes.
+    g.win.eval('reset();startGame(1);clickTerr("CAN");F.AG.gold=100;F.AG.food=100');
+    assert.strictEqual(g.win.eval('applyStrategicRecruitment(currentStrategicRecruitmentState(),"AG","CAN").ok'),true);
+    const saved=g.win.eval('saveGame()');assert.strictEqual(g.win.eval('JSON.parse(decodeURIComponent(escape(atob('+JSON.stringify(saved)+')))).v'),7);
+    assert.strictEqual(g.win.eval('loadGame('+JSON.stringify(saved)+')'),true);
   }finally{closeGame(g);}
 });
 

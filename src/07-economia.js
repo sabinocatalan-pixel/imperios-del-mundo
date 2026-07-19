@@ -38,13 +38,25 @@ function incomePhase(){
       f.gold+=ownedBy(fid).filter(id=>CONTINENTS["Sudamérica"].ids.includes(id)).length;
     }
   }
+  const growthBlockedTerritories=new Set();
   for(const id in T){
     const t=T[id],f=F[t.owner];
     if(t.plague>0){
+      growthBlockedTerritories.add(id);
       t.pop=Math.max(2,Math.floor(t.pop*0.85));t.troops=Math.max(1,Math.floor(t.troops*0.8));
       t.plague=Math.max(0,t.plague-1-(f?f.upMed:0));
       if(t.plague===0)log(`La plaga terminó en ${TERR[id].n}.`);
-    }else if(f&&f.food>0){t.pop=Math.min(80,t.pop+1);f.food--;}
+    }
+  }
+  for(const fid of alive()){
+    const growth=applyPopulationGrowth({T,F,growthBlockedTerritories},fid),name=FACTIONS[fid].name;
+    if(growth.scarcity)logCausal(`⚠ Escasez en ${name}: se consumieron ${growth.paidSubsistence}/${growth.subsistenceCost}🌾 y el crecimiento quedó detenido.`,"loss");
+    else{
+      let msg=`🌾 Subsistencia de ${name}: −${growth.subsistenceCost} comida.`;
+      if(growth.growth)msg+=` 👥 Crecimiento poblacional: +${growth.growth} por ${growth.growthCost} comida.`;
+      if(growth.cappedTerritories)msg+=" 👥 Algunos territorios alcanzaron el tope poblacional.";
+      logCausal(msg);
+    }
   }
   const plagueBase=0.07*(scenario&&scenario.plagueX?scenario.plagueX:1);
   {const ids=Object.keys(T),v=ids[Math.floor(Math.random()*ids.length)];

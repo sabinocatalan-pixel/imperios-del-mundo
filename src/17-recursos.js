@@ -10,6 +10,7 @@ const STRATEGIC_RECRUITMENT={
   localPopulationBonus:4,
   localBaseBonus:4
 };
+const POPULATION_GROWTH={subsistencePerTerritory:1,growthFoodCost:4,territoriesPerSlot:3,territoryCap:40};
 
 function recruitmentTerritories(state){return state&&((state.T&&typeof state.T==="object"&&state.T)||state.territories)||{};}
 function recruitmentFactions(state){return state&&((state.F&&typeof state.F==="object"&&state.F)||state.factions)||{};}
@@ -25,6 +26,38 @@ function normalizeRecruitmentState(value,roundValue=0){
   return clean;
 }
 function currentStrategicRecruitmentState(){return{T,F,recruitmentState};}
+
+function getFoodSubsistenceCost(state,empireId){
+  return Object.values(recruitmentTerritories(state)).filter(t=>t&&t.owner===empireId).length*POPULATION_GROWTH.subsistencePerTerritory;
+}
+function getMaxPopulationGrowthSlots(state,empireId){
+  const territories=Object.values(recruitmentTerritories(state)).filter(t=>t&&t.owner===empireId).length;
+  return territories?Math.ceil(territories/POPULATION_GROWTH.territoriesPerSlot):0;
+}
+function getPopulationGrowthPlan(state,empireId){
+  const territories=recruitmentTerritories(state),faction=recruitmentFactions(state)[empireId];
+  const ownedIds=Object.keys(territories).filter(id=>territories[id]&&territories[id].owner===empireId).sort();
+  const subsistenceCost=getFoodSubsistenceCost(state,empireId),foodAvailable=safeStrategicInteger(faction&&faction.food);
+  const paidSubsistence=Math.min(foodAvailable,subsistenceCost),scarcity=paidSubsistence<subsistenceCost;
+  const blocked=state&&state.growthBlockedTerritories;
+  const isBlocked=id=>blocked instanceof Set?blocked.has(id):Array.isArray(blocked)&&blocked.includes(id);
+  const eligible=ownedIds.filter(id=>safeStrategicInteger(territories[id].pop)<POPULATION_GROWTH.territoryCap&&!isBlocked(id))
+    .sort((a,b)=>safeStrategicInteger(territories[a].pop)-safeStrategicInteger(territories[b].pop)||
+      safeStrategicInteger(territories[b].base)-safeStrategicInteger(territories[a].base)||a.localeCompare(b,"es"));
+  const maxSlots=getMaxPopulationGrowthSlots(state,empireId);
+  const affordable=scarcity?0:Math.floor((foodAvailable-subsistenceCost)/POPULATION_GROWTH.growthFoodCost);
+  const growthIds=eligible.slice(0,Math.min(maxSlots,affordable));
+  const growthCost=growthIds.length*POPULATION_GROWTH.growthFoodCost;
+  return{empireId,ownedIds,subsistenceCost,paidSubsistence,scarcity,maxSlots,growthIds,growth:growthIds.length,
+    growthCost,totalFoodCost:paidSubsistence+growthCost,cappedTerritories:ownedIds.filter(id=>safeStrategicInteger(territories[id].pop)>=POPULATION_GROWTH.territoryCap).length};
+}
+function applyPopulationGrowth(state,empireId){
+  const plan=getPopulationGrowthPlan(state,empireId),territories=recruitmentTerritories(state),faction=recruitmentFactions(state)[empireId];
+  if(!faction)return plan;
+  faction.food=Math.max(0,safeStrategicInteger(faction.food)-plan.totalFoodCost);
+  for(const id of plan.growthIds)territories[id].pop=Math.min(POPULATION_GROWTH.territoryCap,safeStrategicInteger(territories[id].pop)+1);
+  return plan;
+}
 
 function getEmpirePopulationCapacity(state,empireId){
   return Object.values(recruitmentTerritories(state)).reduce((total,t)=>
