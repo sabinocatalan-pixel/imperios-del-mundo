@@ -83,7 +83,7 @@ test("1P: elegir facción entra en fase play", async () => {
 });
 
 /* 2. Ataque: seleccionar territorio propio → vecino enemigo → inBattle && B.mode==="attack";
-      multiplicadores counterMult 1.5/0.66; finishBattle(true) transfiere territorio y cumple conq1. */
+      multiplicadores counterMult 1.5/0.75; finishBattle(true) transfiere territorio y cumple conq1. */
 test("Ataque: abre batalla, counterMult correcto, conquista al ganar", async () => {
   const g = makeGame();
   try {
@@ -97,7 +97,7 @@ test("Ataque: abre batalla, counterMult correcto, conquista al ganar", async () 
     const cm1 = g.win.eval('counterMult({kind:"melee"},{kind:"ranged"})');
     const cm2 = g.win.eval('counterMult({kind:"ranged"},{kind:"melee"})');
     assert.strictEqual(cm1, 1.5);
-    assert.ok(Math.abs(cm2 - 0.66) < 1e-9);
+    assert.ok(Math.abs(cm2 - 0.75) < 1e-9);
 
     g.win.eval('finishBattle(true)');
     const conquered = await waitUntil(g.win, 'T.EUN.owner==="AG"');
@@ -424,7 +424,7 @@ test("Unidades aéreas: matriz, inmunidad melee, límite de 2, resolución forza
   try {
     assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"air"})'), 1.5);
     assert.strictEqual(g.win.eval('counterMult({kind:"air"},{kind:"heavy"})'), 1.5);
-    assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"air"})'), 1, "sin matchup definido: multiplicador normal");
+    assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"air"})'), 0, "melee no alcanza aéreos");
 
     g.win.eval('startGame(1.0)');
     g.win.eval('clickTerr("CAN")'); // player = AG
@@ -1743,7 +1743,48 @@ test("Counters 3F-1: matriz declarativa completa sin alterar combate", () => {
     assert.strictEqual(siege.role,"indirect");assert.strictEqual(siege.minRange,80);
     assert.deepStrictEqual(siege.suppressedBy,["melee"]);
     assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"ranged"})'),1.5);
-    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"melee"})'),0.66,"el combate real aún conserva 3C");
+    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"melee"})'),0.75,"el combate usa la matriz 3F");
+  }finally{closeGame(g);}
+});
+
+/* 45 (Fase 3F-2). El motor consume una sola vez la matriz y mantiene fuera
+   duelo, boss y salpicadura secundaria. */
+test("Counters 3F-2: aplicación centralizada y exclusiones", () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");T.EUN.owner="CO";openBattle("CAN","EUN","attack")');
+    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"melee"})'),0.75);
+    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"air"})'),1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"air"},{kind:"heavy"})'),1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"air"},{kind:"siege"})'),1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"siege"})'),1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"champ"},{kind:"heavy"})'),0.85);
+    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"champ"})'),1);
+    for(const kind of["melee","heavy","siege"])
+      assert.strictEqual(g.win.eval(`canTargetKind("${kind}","air")`),false);
+
+    // Daño a estructura: misma unidad base y sin otros modificadores.
+    g.win.eval(`B.units=[];B.pacing.muerteSubita=false;B.S["1"].dmgBuffAllT=0;
+      B.airBase=mkUnit(1,"air",0,0);B.airBase.x=W-70;B.airBase.t=0;B.units=[B.airBase];
+      B.eHP=1000;B.last=100;`);
+    const airBefore=g.win.eval('B.eHP'),airDmg=g.win.eval('B.airBase.dmg');
+    g.win.eval('bloop(150)');
+    {const dealt=airBefore-g.win.eval('B.eHP');assert.ok(Math.abs(dealt-airDmg*0.75)<0.01,
+      `aérea aplica ×0.75 a base (observado ${dealt}, esperado ${airDmg*0.75})`);}
+
+    g.win.eval(`B.units=[];B.siegeBase=mkUnit(1,"siege",0,0);B.siegeBase.x=W-158;
+      B.siegeBase.t=0;B.units=[B.siegeBase];B.eHP=1000;B.last=100;`);
+    const siegeBefore=g.win.eval('B.eHP'),siegeDmg=g.win.eval('B.siegeBase.dmg');
+    g.win.eval('bloop(150)');
+    assert.ok(Math.abs((siegeBefore-g.win.eval('B.eHP'))-siegeDmg)<0.01,"asedio conserva ×1 contra base");
+
+    // Salpicadura queda neutral: no consulta counterMult para el secundario.
+    const source=fs.readFileSync(path.join(__dirname,"..","src","09-batalla.js"),"utf8");
+    const splash=source.match(/const nearby=B\.units\.filter\(v=>v!==tgt[\s\S]*?if\(u\.heroId===/)[0];
+    assert.ok(!splash.includes("counterMult("),"salpicadura no duplica el counter");
+    assert.strictEqual(g.win.eval('getCounterMultiplier("champ","heavy",{duel:true})'),1,"duelo excluido");
+    assert.strictEqual(g.win.eval('getCounterMultiplier("air","heavy",{battleType:"boss"})'),1,"boss excluido");
+    assert.strictEqual(g.win.eval('getStructureMultiplier("air",{battleType:"boss"})'),1,"boss conserva daño estructural");
   }finally{closeGame(g);}
 });
 

@@ -1,6 +1,5 @@
 /* ==================== 16-counters.js ====================
-   Fase 3F-1: fuente declarativa de counters. El motor de batalla conserva
-   temporalmente counterMult() y sus valores anteriores hasta 3F-2. */
+   Fase 3F: fuente declarativa única consumida por el motor desde 3F-2. */
 
 const COUNTER_TYPES=["melee","ranged","heavy","healer","siege","air"];
 

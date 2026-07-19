@@ -46,9 +46,7 @@ function drawBG(){
   gg.addColorStop(0,"#8A7B54");gg.addColorStop(1,"#5E5138");
   bx.fillStyle=gg;bx.fillRect(0,GROUND,W,LH-GROUND);
 }
-const COUNTER={melee:"ranged",ranged:"heavy",heavy:"melee"}; // clave vence a valor
 const CARROW={melee:"🗡→🏹",ranged:"🏹→🛡",heavy:"🛡→🗡"};
-const AIR_BONUS={ranged:"air",air:"heavy"}; // 🏹→✈️ ×1.5 (antiaéreo) · ✈️→🛡 ×1.5
 
 function unitStats(kind,era,arm,wl){
   const m=Math.pow(1.75,era)*(1+arm*0.15);
@@ -72,11 +70,8 @@ function mkUnit(side,kind,era,arm,wl){
     healRate:s.healRate||0,minRng:s.minRng||0};
 }
 function counterMult(att,def){
-  if(def.kind==="siege"&&(att.kind==="melee"||att.kind==="air"))return 1.5;
-  if(COUNTER[att.kind]===def.kind)return 1.5;
-  if(COUNTER[def.kind]===att.kind)return 0.66;
-  if(AIR_BONUS[att.kind]===def.kind)return 1.5; // ranged vs air, air vs heavy
-  return 1;
+  const duel=att.kind==="champ"&&def.kind==="champ";
+  return getCounterMultiplier(att.kind,def.kind,{battleType:B&&B.mode,duel});
 }
 // Reducción de daño recibido por pasivas/activas de héroes (Leónidas, Pachacútec)
 // y por el rasgo de veteranía Nv3 de los melee (+5% def).
@@ -690,10 +685,10 @@ function bloop(now){
         }
         continue; // soporte puro: nunca busca ni ataca enemigos
       }
-      // Melee y heavy no alcanzan aéreos (inmunidad): se filtran de su lista
-      // de enemigos válidos, tanto para atacar como para bloquear su avance.
-      const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&
-        !((u.kind==="melee"||u.kind==="heavy")&&v.kind==="air"));
+      // La misma fuente declarativa decide qué tipos pueden seleccionarse.
+      // En boss se conserva el comportamiento aislado anterior.
+      const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&canTargetKind(u.kind,v.kind,
+        {battleType:B.mode,duel:u.kind==="champ"&&v.kind==="champ"}));
       const siegeSuppressed=u.kind==="siege"&&foes.some(v=>v.kind==="melee"&&Math.abs(v.x-u.x)<u.minRng);
       let tgt=null,dist=Infinity;
       if(u.kind==="melee"){
@@ -707,18 +702,18 @@ function bloop(now){
         }
         if(!tgt&&candidatos.length){tgt=candidatos[0];dist=Math.abs(candidatos[0].x-u.x);} // todos con 3+: ataca igual al más cercano
       }else if(u.kind==="air"){
-        // Objetivo aéreo: prioriza heavy enemigo; si no hay, ✈️ vs ✈️ también
-        // es un enfrentamiento válido (matriz ✈️vs✈️ ×1); si no hay ninguno
-        // de los dos, ignora el resto de unidades terrestres y va por la base.
-        const candidatos=foes.filter(v=>(v.kind==="heavy"||v.kind==="siege"||v.kind==="air")&&(v.x-u.x)*u.side>0)
-          .sort((a,b)=>{const pr={heavy:0,siege:1,air:2};return pr[a.kind]-pr[b.kind]||Math.abs(a.x-u.x)-Math.abs(b.x-u.x);});
+        // Aérea prioriza sus ventajas declaradas; los cruces neutrales siguen
+        // siendo objetivos válidos y evitan que ignore una defensa completa.
+        const candidatos=foes.filter(v=>(v.x-u.x)*u.side>0)
+          .sort((a,b)=>{const pr={heavy:0,siege:1,air:2,healer:3,ranged:4,melee:5,champ:6};
+            return(pr[a.kind]??7)-(pr[b.kind]??7)||Math.abs(a.x-u.x)-Math.abs(b.x-u.x);});
         tgt=candidatos[0]||null;
         dist=tgt?Math.abs(tgt.x-u.x):Infinity;
       }else if(u.kind==="siege"){
         if(!siegeSuppressed){
           const enemyBase=u.side===1?W-58:58,bd=(enemyBase-u.x)*u.side;
           if(bd>u.rng+18){
-            const candidatos=foes.filter(v=>v.kind!=="air"&&(v.x-u.x)*u.side>=u.minRng)
+            const candidatos=foes.filter(v=>(v.x-u.x)*u.side>=u.minRng)
               .sort((a,b)=>(b.kind==="healer")-(a.kind==="healer")||Math.abs(a.x-u.x)-Math.abs(b.x-u.x));
             tgt=candidatos[0]||null;dist=tgt?Math.abs(tgt.x-u.x):Infinity;
           }
@@ -742,6 +737,8 @@ function bloop(now){
       if(tgt&&dist<=engageRng){
         u.attackedInWindow=true; // atacando: no cuenta para el anti-atoro
         if(u.t<=0){u.t=u.atk;
+          // Orden lógico: matriz → bonus de salida/reliquia ya incorporado en
+          // la unidad → defensas, veteranía defensiva y Perla en dmgTakenMult.
           const mult=counterMult(u,tgt);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
           tgt.hp-=dm;tgt.flash=0.15;SFX.hit();
@@ -792,7 +789,8 @@ function bloop(now){
         u.attackedInWindow=true; // atacando la base: no cuenta para el anti-atoro
         if(u.t<=0){u.t=u.atk;
           const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
-          const dmgToBase=u.dmg*dmgMultOut*baseMult;
+          const structureMult=getStructureMultiplier(u.kind,{battleType:B.mode});
+          const dmgToBase=u.dmg*structureMult*dmgMultOut*baseMult;
           if(u.side===1){B.eHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           else{B.pHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           B.S[String(u.side)].dmgDealt+=dmgToBase;
