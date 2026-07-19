@@ -61,14 +61,14 @@ const RELICS={
     id:"aliento_long",name:"Aliento del Long",sourceMonster:"long",rewardId:"perla_long",
     description:"Un vestigio del poder celeste del Long para encabezar una ofensiva.",
     effect:{type:"first_offensive_units_damage",value:0.10,unitCount:3,exclude:["healer"]},
-    restriction:"Solo al atacar; primeras 3 unidades ofensivas; excluye sanadores.",inertUntilEquipped:true,
+    restriction:"Solo al atacar; primeras 3 unidades ofensivas; excluye sanadores.",inertUntilEquipped:true,effectReady:true,
     help:"Mejora un 10% el daño de las primeras 3 unidades ofensivas al atacar."
   },
   ankh_anubis:{
     id:"ankh_anubis",name:"Ankh de Anubis",sourceMonster:"anubis",rewardId:"sello_anubis",
     description:"Un símbolo funerario legendario asociado al juicio de Anubis.",
     effect:{type:"troop_recovery_after_defense",value:0.15,maxTroops:3,usesPerRound:1},
-    restriction:"Tras una defensa ganada; máximo 3 tropas; una vez por ronda.",inertUntilEquipped:true,
+    restriction:"Tras una defensa ganada; máximo 3 tropas; una vez por ronda.",inertUntilEquipped:true,effectReady:true,
     help:"Recupera un 15% de las tropas perdidas tras defender con éxito, hasta 3."
   }
 };
@@ -112,7 +112,9 @@ function dedupeRelicRewards(state){
 function migrateRelicState(state){
   const parts=relicStateParts(state),monsterState={...parts.monsterState,rewards:dedupeRelicRewards(parts)};
   const factions={};
-  for(const id in parts.factions)factions[id]={...parts.factions[id],equippedRelic:parts.factions[id].equippedRelic||null};
+  for(const id in parts.factions)factions[id]={...parts.factions[id],
+    equippedRelic:parts.factions[id].equippedRelic||null,
+    ankhUsedRound:Number.isFinite(parts.factions[id].ankhUsedRound)?parts.factions[id].ankhUsedRound:null};
   const migrated={monsterState,factions};
   for(const id in factions)factions[id].equippedRelic=validateEquippedRelic(migrated,id);
   return migrated;
@@ -160,8 +162,7 @@ function unequipRelic(state,empireId){
   return true;
 }
 
-/* Fase 3C-3B: resolución contextual de efectos ya implementados. Aliento
-   y Ankh quedan fuera y no pueden activarse todavía. */
+/* Resolución contextual de efectos equipados de 3C. */
 function hasEquippedRelic(state,empireId,relicId){
   const parts=relicStateParts(state),faction=parts.factions[empireId];
   return !!(faction&&faction.equippedRelic===relicId&&ownsRelic(parts,empireId,relicId));
@@ -177,7 +178,23 @@ function getActiveRelicEffect(state,empireId,context={}){
   if(equipped.id==="escama_amaru"){
     return context.battleType==="normal"&&context.role==="hero"&&!context.duel?equipped.effect:null;
   }
+  if(equipped.id==="aliento_long"){
+    return context.battleType==="normal"&&context.role==="attacker"&&!context.duel?equipped.effect:null;
+  }
+  if(equipped.id==="ankh_anubis"){
+    const faction=relicStateParts(state).factions[empireId];
+    return context.battleType==="normal"&&context.role==="defender"&&context.won===true&&!context.duel&&
+      faction.ankhUsedRound!==context.round?equipped.effect:null;
+  }
   return null;
+}
+function applyAnkhRecovery(state,empireId,context){
+  const parts=relicStateParts(state),effect=getActiveRelicEffect(parts,empireId,context);
+  if(!effect||effect.type!=="troop_recovery_after_defense")return 0;
+  const lost=Math.max(0,(context.troopsBefore||0)-(context.troopsAfter||0));
+  const recovered=Math.min(effect.maxTroops,lost,Math.round(lost*effect.value));
+  if(recovered>0)parts.factions[empireId].ankhUsedRound=context.round;
+  return recovered;
 }
 
 function emptyMonsterState(){return{active:null,defeated:{},rewards:[]};}

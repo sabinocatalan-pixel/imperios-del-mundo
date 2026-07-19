@@ -175,7 +175,7 @@ function openBattle(from,to,mode){
   const pvp=humans.includes(pFacId)&&humans.includes(eFacId);
   const pFac=F[pFacId],eFac=F[eFacId];
   B={
-    from,to,mode,pvp,over:false,result:null,time:0,shake:0,freeze:0,
+    from,to,mode,pvp,over:false,result:null,time:0,shake:0,freeze:0,defenderTroopsStart:defT.troops,
     pFacId,eFacId,
     pHP:0,pMax:0,eHP:0,eMax:0,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],
@@ -202,6 +202,8 @@ function openBattle(from,to,mode){
     const effect=getActiveRelicEffect(currentRelicState(),S.fac,
       {battleType:"normal",role,territoryId:to,duel:false});
     S.relicDamageTakenMult=effect&&effect.type==="coastal_defense_damage_reduction"?1-effect.value:1;
+    S.relicOffensiveEffect=effect&&effect.type==="first_offensive_units_damage"?effect:null;
+    S.relicOffensiveUnitsRemaining=S.relicOffensiveEffect?S.relicOffensiveEffect.unitCount:0;
   }
   // Bases +15% PV (Fase 2C) respecto al balance anterior.
   if(mode==="attack"){
@@ -270,6 +272,12 @@ function spawnUnit(side,kind){
   if(B.over||P.gold<cost||P.cool[kind]>0)return;
   P.gold-=cost;P.cool[kind]=st.cd;SFX.spawn();
   const u=mkUnit(+side,kind,f.era,f.upArm);
+  const longEffect=P.relicOffensiveEffect;
+  if(!B.duel&&longEffect&&P.relicOffensiveUnitsRemaining>0&&!longEffect.exclude.includes(kind)){
+    u.dmg*=1+longEffect.value;u.relicDamageBonus=longEffect.value;P.relicOffensiveUnitsRemaining--;
+    if(!P.relicOffensiveAnnounced){P.relicOffensiveAnnounced=true;
+      pushBanner("◆ Aliento del Long impulsa la primera oleada","#8EC5FF",3.5,"Primeras 3 unidades ofensivas: +10% daño");}
+  }
   if(B.pacing.desgaste){u.hp*=0.9;u.max*=0.9;} // desgaste (180s): refuerzos con -10% PV máx
   P.spawnedTypes[kind]=(P.spawnedTypes[kind]||0)+1;
   applyVeterancy(u,kind,veteranLevel((f.veterancy&&f.veterancy[kind]?f.veterancy[kind].xp:0)));
@@ -1099,6 +1107,14 @@ function finishBattle(win,retreat=false){
     const surv1=Math.max(2,B.units.filter(u=>u.side===1).length+2);
     const surv2=Math.max(2,B.units.filter(u=>u.side===-1).length+2);
     const soloMe=humans.length===1&&me===humans[0];
+    function recoverWithAnkh(defenderId,troopsAfter){
+      const recovered=applyAnkhRecovery(currentRelicState(),defenderId,
+        {battleType:"normal",role:"defender",won:true,duel:false,round,
+          troopsBefore:B.defenderTroopsStart,troopsAfter});
+      if(recovered>0){T[to].troops=Math.min(B.defenderTroopsStart,T[to].troops+recovered);
+        logCausal(`◆ Ankh de Anubis recuperó ${recovered} ${recovered===1?"tropa":"tropas"} de ${fname(defenderId)} tras defender ${TERR[to].n}.`,"win");}
+      return recovered;
+    }
     if(mode==="attack"){
       if(win){
         T[to].owner=me;T[to].troops=surv1;
@@ -1112,12 +1128,13 @@ function finishBattle(win,retreat=false){
         log(`${fname(me)} conquistó ${TERR[to].n} en batalla.`,"win");
       }else{
         T[from].troops=Math.max(1,Math.floor(T[from].troops*(retreat?0.7:0.45)));
-        if(B.pvp&&!retreat)T[to].troops=Math.max(2,surv2);
+        if(B.pvp&&!retreat){T[to].troops=Math.max(2,surv2);recoverWithAnkh(foe,T[to].troops);}
         log(retreat?`${fname(me)} se retiró de ${TERR[to].n}.`:`La ofensiva de ${fname(me)} sobre ${TERR[to].n} fracasó.`,"loss");
       }
     }else{ // defensa (humano defiende su territorio "to")
       if(win){
         T[to].troops=Math.max(2,surv1);
+        recoverWithAnkh(me,T[to].troops);
         T[from].troops=Math.max(1,Math.floor(T[from].troops*0.4));
         F[me].gold+=10;
         log(`${fname(me)} defendió ${TERR[to].n}. El invasor se retira.`,"win");

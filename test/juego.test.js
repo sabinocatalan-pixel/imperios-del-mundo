@@ -1475,7 +1475,7 @@ test("Claridad UI: habilidades de héroes y reliquias propias", () => {
     assert.ok(panel&&panel.textContent.includes("1 slot"));
     assert.ok(panel.textContent.includes("Perla del Abismo")&&panel.textContent.includes("Aliento del Long"));
     assert.ok(!panel.textContent.includes("Escama de Amaru"),"no lista reliquias ajenas");
-    assert.ok(panel.textContent.includes("Efectos todavía en preparación"));
+    assert.ok(panel.textContent.includes("Efecto activo al equipar"));
 
     const statsBefore=g.win.eval('JSON.stringify({gold:F.AG.gold,troops:T.CAN.troops,upArm:F.AG.upArm})');
     let button=[...g.doc.querySelectorAll("#empBtns button")].find(b=>b.textContent.includes("Equipar ◆ Perla"));
@@ -1501,8 +1501,7 @@ test("Claridad UI: habilidades de héroes y reliquias propias", () => {
   }finally{closeGame(g);}
 });
 
-/* 39 (Fase 3C-3B). Perla y Escama aplican únicamente sus contextos
-   aprobados; Aliento y Ankh permanecen sin efecto. */
+/* 39 (Fase 3C-3B). Perla y Escama aplican únicamente sus contextos aprobados. */
 test("Reliquias 3C-3B: Perla defensiva y Escama del héroe", () => {
   const g=makeGame();
   try{
@@ -1542,12 +1541,66 @@ test("Reliquias 3C-3B: Perla defensiva y Escama del héroe", () => {
       openBossBattle("AG","CAN");spawnChamp("1")`);
     assert.ok(Math.abs(g.win.eval('B.units.find(u=>u.heroId==="leonidas").max')-baseMax)<1e-9,"Escama no funciona en boss");
 
-    g.win.eval(`closeRelicBattle();monsterState.active=null;monsterState.rewards=[
-      getMonsterReward("long","AG","CHN",8),getMonsterReward("anubis","AG","MAG",9)];
-      F.AG.equippedRelic="aliento_long";`);
-    assert.strictEqual(g.win.eval('getActiveRelicEffect(currentRelicState(),"AG",{battleType:"normal",role:"attacker",territoryId:"EUN"})'),null);
-    g.win.eval('F.AG.equippedRelic="ankh_anubis"');
-    assert.strictEqual(g.win.eval('getActiveRelicEffect(currentRelicState(),"AG",{battleType:"normal",role:"defender",territoryId:"CAN"})'),null,"Aliento y Ankh siguen inactivos");
+    g.win.eval('closeRelicBattle();monsterState.active=null');
+    assert.strictEqual(g.win.eval('RELICS.perla_abismo.effectReady&&RELICS.escama_amaru.effectReady'),true);
+  }finally{closeGame(g);}
+});
+
+/* 40 (Fase 3C-3C). Aliento limita su primera oleada y Ankh recupera
+   defensores una vez por ronda con persistencia v6. */
+test("Reliquias 3C-3C: Aliento ofensivo y Ankh tras defensa", async () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");
+      function closeRelicBattle2(){if(B)B.over=true;B=null;inBattle=false;document.getElementById("battle").style.display="none";}
+      F.AG.era=2;monsterState.rewards=[getMonsterReward("long","AG","CHN",8)];F.AG.equippedRelic="aliento_long";
+      T.CAN.owner="AG";T.EUN.owner="CO";openBattle("CAN","EUN","attack");B.S["1"].gold=999;`);
+    assert.strictEqual(g.win.eval('B.S["1"].relicOffensiveUnitsRemaining'),3);
+    g.win.eval('spawnUnit("1","healer")');
+    assert.strictEqual(g.win.eval('B.S["1"].relicOffensiveUnitsRemaining'),3,"sanador no consume la oleada");
+    assert.strictEqual(g.win.eval('B.units.find(u=>u.kind==="healer").relicDamageBonus'),undefined);
+    g.win.eval('spawnUnit("1","melee");spawnUnit("1","ranged");spawnUnit("1","air");spawnUnit("1","heavy")');
+    const boosted=Array.from(g.win.eval('B.units.filter(u=>u.relicDamageBonus).map(u=>u.kind)'));
+    assert.deepStrictEqual(boosted,["melee","ranged","air"],"afecta exactamente las primeras tres elegibles");
+    assert.strictEqual(g.win.eval('B.S["1"].relicOffensiveUnitsRemaining'),0);
+    assert.strictEqual(g.win.eval('B.units.find(u=>u.kind==="heavy").relicDamageBonus'),undefined,"la cuarta queda normal");
+    assert.ok(Math.abs(g.win.eval('B.units.find(u=>u.kind==="air").dmg/unitStats("air",2,0).dmg')-1.1)<1e-9,"aéreas reciben el mismo 10%, no uno especial");
+    assert.ok(g.win.eval('(B.banner&&B.banner.txt.includes("Aliento del Long"))||B.bannerQueue.some(x=>x.txt.includes("Aliento del Long"))'));
+
+    g.win.eval('closeRelicBattle2();openBattle("EUN","CAN","defense");B.S["1"].gold=999;spawnUnit("1","melee")');
+    assert.strictEqual(g.win.eval('B.units[0].relicDamageBonus'),undefined,"no funciona al defender");
+    g.win.eval('closeRelicBattle2();openBattle("CAN","EUN","attack");B.S["1"].gold=999;B.duel={resolved:false};spawnUnit("1","melee")');
+    assert.strictEqual(g.win.eval('B.units[0].relicDamageBonus'),undefined,"no funciona durante duelo");
+    assert.strictEqual(g.win.eval('B.S["1"].relicOffensiveUnitsRemaining'),3,"duelo no consume cargas");
+    assert.strictEqual(g.win.eval('getActiveRelicEffect(currentRelicState(),"AG",{battleType:"boss",role:"attacker"})'),null,"no funciona en boss");
+
+    g.win.eval(`closeRelicBattle2();monsterState.rewards=[getMonsterReward("long","SO","CHN",8)];
+      F.AG.equippedRelic="aliento_long";openBattle("CAN","EUN","attack")`);
+    assert.strictEqual(g.win.eval('B.S["1"].relicOffensiveUnitsRemaining'),0,"reliquia ajena no aplica");
+    g.win.eval('closeRelicBattle2();F.AG.equippedRelic=null;openBattle("CAN","EUN","attack");B.S["1"].gold=999;spawnUnit("1","melee")');
+    assert.strictEqual(g.win.eval('B.units[0].relicDamageBonus'),undefined,"sin reliquia mantiene daño anterior");
+
+    g.win.eval(`closeRelicBattle2();monsterState.rewards=[getMonsterReward("anubis","AG","MAG",9)];
+      F.AG.equippedRelic="ankh_anubis";F.AG.ankhUsedRound=null;round=10;`);
+    assert.strictEqual(g.win.eval('applyAnkhRecovery(currentRelicState(),"AG",{battleType:"normal",role:"attacker",won:true,round:10,troopsBefore:24,troopsAfter:4})'),0,"no funciona al atacar");
+    assert.strictEqual(g.win.eval('applyAnkhRecovery(currentRelicState(),"AG",{battleType:"normal",role:"defender",won:false,round:10,troopsBefore:24,troopsAfter:4})'),0,"no funciona al perder");
+    assert.strictEqual(g.win.eval('applyAnkhRecovery(currentRelicState(),"AG",{battleType:"normal",role:"defender",won:true,duel:true,round:10,troopsBefore:24,troopsAfter:4})'),0,"no funciona en duelo");
+    assert.strictEqual(g.win.eval('applyAnkhRecovery(currentRelicState(),"AG",{battleType:"boss",role:"defender",won:true,round:10,troopsBefore:24,troopsAfter:4})'),0,"no funciona en boss");
+
+    g.win.eval('T.CAN.troops=24;T.CAN.owner="AG";T.EUN.owner="CO";openBattle("EUN","CAN","defense");B.units=[mkUnit(1,"melee",0,0),mkUnit(1,"ranged",0,0)];finishBattle(true)');
+    await sleep(1700);
+    assert.strictEqual(g.win.eval('T.CAN.troops'),7,"recupera 3 sobre 20 pérdidas y respeta el máximo");
+    assert.strictEqual(g.win.eval('F.AG.ankhUsedRound'),10);
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Ankh de Anubis recuperó 3"))'),"feedback causal");
+
+    const saved=g.win.eval('saveGame()');
+    g.win.eval('F.AG.ankhUsedRound=null;loadGame('+JSON.stringify(saved)+')');
+    assert.strictEqual(g.win.eval('F.AG.ankhUsedRound'),10,"save v6 conserva la ronda de uso");
+    assert.strictEqual(g.win.eval('applyAnkhRecovery(currentRelicState(),"AG",{battleType:"normal",role:"defender",won:true,round:10,troopsBefore:20,troopsAfter:0})'),0,"no activa dos veces en la misma ronda");
+    g.win.eval('round=11');
+    assert.strictEqual(g.win.eval('applyAnkhRecovery(currentRelicState(),"AG",{battleType:"normal",role:"defender",won:true,round:11,troopsBefore:11,troopsAfter:4})'),1,"15% redondeado recupera una tropa");
+
+    assert.ok(g.win.eval('Object.values(RELICS).every(r=>r.effectReady)'),"las cuatro reliquias tienen efecto activo");
   }finally{closeGame(g);}
 });
 

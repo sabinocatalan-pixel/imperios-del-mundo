@@ -29,7 +29,7 @@ function reset(){
   for(const id in TERR)T[id]={owner:TERR[id].f,troops:6,pop:10,base:0,plague:0};
   for(const f in FACTIONS)F[f]={gold:40,food:20,science:0,faith:0,culture:0,era:0,
     upArm:0,upEco:0,upMed:0,heroes:[null,null,null],heroWeaponLv:1,heroProgress:{},
-    veterancy:nuevaVeterancia(),equippedRelic:null,ai:true};
+    veterancy:nuevaVeterancia(),equippedRelic:null,ankhUsedRound:null,ai:true};
   player=null;round=1;phase="pick";selected=null;inBattle=false;aiCont=null;scenario=null;relicChangeOpen=false;
   humans=[];turnIdx=0;pendingOffer=null;coalition=null;coalitionCooldownUntil=null;eventHistory=[];warHistory=[];
   rel={};pacts=[];
