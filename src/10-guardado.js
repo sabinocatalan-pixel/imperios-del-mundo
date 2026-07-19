@@ -54,7 +54,7 @@ function loadGame(code){
     missions=MISSION_DEFS.map((m,i)=>({...m,done:!!d.mis[i]}));
     if(d.leg){LEGACY.wins=d.leg.wins|0;LEGACY.hardWins=d.leg.hardWins|0;LEGACY.scen=d.leg.scen||{};LEGACY.heroes=d.leg.heroes||{};}
     scenario=d.scn?SCENARIOS.find(x=>x.id===d.scn)||null:null;
-    phase="play";selected=null;inBattle=false;aiCont=null;
+    phase="play";selected=null;inBattle=false;aiCont=null;relicChangeOpen=false;
     closeModals();$("battle").style.display="none";
     log("Partida cargada desde código.","win");
     setStatus(`Partida restaurada — Ronda <strong>${round}</strong>.`);

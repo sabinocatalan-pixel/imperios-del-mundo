@@ -118,6 +118,47 @@ function migrateRelicState(state){
   return migrated;
 }
 
+/* Fase 3C-2: un único slot puede gestionarse solo durante la ventana de
+   inicio del turno. Estas operaciones no consultan ni aplican efectos. */
+function currentRelicState(){
+  return{monsterState,factions:F,phase,player,inBattle,relicChangeOpen,feedback:true};
+}
+function relicActionParts(state){
+  const parts=relicStateParts(state);
+  return{...parts,phase:state&&state.phase,player:state&&state.player,
+    inBattle:!!(state&&state.inBattle),relicChangeOpen:!!(state&&state.relicChangeOpen),
+    feedback:!!(state&&state.feedback)};
+}
+function canChangeRelic(state,empireId){
+  const parts=relicActionParts(state);
+  return !!(parts.factions[empireId]&&parts.phase==="play"&&!parts.inBattle&&
+    parts.player===empireId&&parts.relicChangeOpen);
+}
+function getEquippedRelic(state,empireId){
+  const parts=relicActionParts(state),id=validateEquippedRelic(parts,empireId);
+  return id?getRelicById(id):null;
+}
+function relicChangeFeedback(state,message){
+  if(relicActionParts(state).feedback&&typeof log==="function")log(message,"win");
+}
+function equipRelic(state,empireId,relicId){
+  const parts=relicActionParts(state),relic=getRelicById(relicId);
+  if(!canChangeRelic(parts,empireId)||!relic||!ownsRelic(parts,empireId,relicId))return false;
+  const previous=getEquippedRelic(parts,empireId);
+  parts.factions[empireId].equippedRelic=relicId;
+  relicChangeFeedback(state,previous&&previous.id!==relicId
+    ?`Cambiaste ${previous.name} por ${relic.name}. Sus efectos aún están inactivos.`
+    :`Equipaste ${relic.name}. Sus efectos aún están inactivos.`);
+  return true;
+}
+function unequipRelic(state,empireId){
+  const parts=relicActionParts(state),previous=getEquippedRelic(parts,empireId);
+  if(!canChangeRelic(parts,empireId)||!previous)return false;
+  parts.factions[empireId].equippedRelic=null;
+  relicChangeFeedback(state,`Retiraste ${previous.name}.`);
+  return true;
+}
+
 function emptyMonsterState(){return{active:null,defeated:{},rewards:[]};}
 function getMonsterById(id){return MONSTERS[id]||null;}
 function getAvailableMonsters(state){

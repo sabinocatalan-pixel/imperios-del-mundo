@@ -1409,6 +1409,46 @@ test("Reliquias 3C-1: datos, propiedad y migración v6", () => {
   }finally{closeGame(g);}
 });
 
+/* 37 (Fase 3C-2). Un solo slot, propiedad, ventana de inicio de turno y
+   persistencia sin activar efectos. */
+test("Reliquias 3C-2: equipar, cambiar y retirar al inicio del turno", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");monsterState.rewards=[
+      getMonsterReward("kraken","AG","CAN",8),
+      getMonsterReward("long","AG","CHN",9),
+      getMonsterReward("amaru","SO","PER",9)
+    ]`);
+    assert.strictEqual(g.win.eval('relicChangeOpen'),true,"la ventana abre al iniciar el turno");
+    assert.strictEqual(g.win.eval('canChangeRelic(currentRelicState(),"AG")'),true);
+    assert.strictEqual(g.win.eval('equipRelic(currentRelicState(),"AG","no_existe")'),false,"rechaza id inexistente");
+    assert.strictEqual(g.win.eval('equipRelic(currentRelicState(),"AG","escama_amaru")'),false,"rechaza reliquia ajena");
+
+    const before=g.win.eval('JSON.stringify({gold:F.AG.gold,troops:T.CAN.troops,base:T.CAN.base})');
+    assert.strictEqual(g.win.eval('equipRelic(currentRelicState(),"AG","perla_abismo")'),true);
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),"perla_abismo");
+    assert.strictEqual(g.win.eval('getEquippedRelic(currentRelicState(),"AG").id'),"perla_abismo");
+    assert.strictEqual(g.win.eval('equipRelic(currentRelicState(),"AG","aliento_long")'),true,"la segunda reemplaza a la primera");
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),"aliento_long","solo existe un slot");
+    assert.strictEqual(g.win.eval('JSON.stringify({gold:F.AG.gold,troops:T.CAN.troops,base:T.CAN.base})'),before,"equipar no activa efectos ni cambia estadísticas");
+
+    const code=g.win.eval('saveGame()');
+    g.win.eval('F.AG.equippedRelic=null;loadGame('+JSON.stringify(code)+')');
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),"aliento_long","save v6 conserva el slot válido");
+    assert.strictEqual(g.win.eval('relicChangeOpen'),false,"cargar no reabre la ventana de cambio");
+    assert.strictEqual(g.win.eval('equipRelic(currentRelicState(),"AG","perla_abismo")'),false,"fuera del inicio no cambia");
+
+    g.win.eval('relicChangeOpen=true');
+    assert.strictEqual(g.win.eval('unequipRelic(currentRelicState(),"AG")'),true);
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),null,"se puede retirar");
+    assert.strictEqual(g.win.eval('unequipRelic(currentRelicState(),"AG")'),false,"no retira dos veces");
+
+    g.win.eval('F.AG.equippedRelic="escama_amaru";const m=migrateRelicState({monsterState,factions:F});F=m.factions;');
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),null,"la validación limpia selección ajena");
+    assert.ok(g.win.eval('Object.values(RELICS).every(r=>r.inertUntilEquipped)'),"los cuatro efectos siguen declarados como inertes");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

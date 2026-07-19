@@ -17,7 +17,7 @@ function startRound(){
 function beginHumanTurn(){
   while(turnIdx<humans.length&&!alive().includes(humans[turnIdx]))turnIdx++;
   if(turnIdx>=humans.length){aiTurns(true);return;}
-  player=humans[turnIdx];phase="play";selected=null;
+  player=humans[turnIdx];phase="play";selected=null;relicChangeOpen=true;
   const quien=humans.length>1?`Turno de <strong>${fname(player)}</strong> — `:"";
   setStatus(`Ronda <strong>${round}</strong> — ${quien}Territorio tuyo → vecino enemigo para <strong>batalla</strong>. Territorio enemigo = diplomacia.`);
   maybeShowOffer();
@@ -25,7 +25,7 @@ function beginHumanTurn(){
 }
 function endHumanTurn(){
   if(inBattle||phase!=="play")return;
-  SFX.click();turnIdx++;
+  relicChangeOpen=false;SFX.click();turnIdx++;
   if(turnIdx<humans.length)beginHumanTurn();else aiTurns(true);
 }
 function maybeShowOffer(){
@@ -39,6 +39,7 @@ function maybeShowOffer(){
 }
 function resolveOffer(accept){
   const o=pendingOffer;pendingOffer=null;
+  relicChangeOpen=false;
   $("diploModal").style.display="none";SFX.click();
   if(!o)return;
   if(o.type==="nap"){
@@ -130,7 +131,7 @@ function updateCoalition(){
 function aiTurns(fromTurnFlow){
   if(inBattle)return;
   if(!fromTurnFlow&&phase!=="play")return;
-  phase="ai";selected=null;
+  phase="ai";selected=null;relicChangeOpen=false;
   setStatus("Los imperios rivales maniobran…");render();
   const enemies=alive().filter(x=>!humans.includes(x));let i=0;
   function step(){
@@ -241,6 +242,7 @@ function clickTerr(id){
     round=1;startRound();return;
   }
   if(phase!=="play")return;
+  relicChangeOpen=false;
   const t=T[id];
   if(t.owner===player){selected=(selected===id)?null:id;render();return;}
   if(selected&&T[selected].owner===player&&ADJ[selected].includes(id)){
