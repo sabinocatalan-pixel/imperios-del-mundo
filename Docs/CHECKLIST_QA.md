@@ -2,56 +2,46 @@
 
 ## Puerta común para cualquier bloque
 
-- [ ] Alcance coincide con su documento `FASE_*.md`.
+- [ ] Alcance coincide con su documento de fase.
 - [ ] Un commit lógico con mensaje en español.
 - [ ] Sin dependencias/runtime externos nuevos.
 - [ ] `npm.cmd run build` correcto.
 - [ ] `npm.cmd test` 100% verde.
 - [ ] `git diff --check` sin errores.
-- [ ] `git status --short` entendido; sin cambios accidentales.
+- [ ] `git status --short` entendido.
 - [ ] Guardado anterior carga y guardado nuevo hace round-trip.
 - [ ] Jugador e IA usan las mismas reglas.
-- [ ] UI móvil, safe areas, botones ≥44 px y movimiento reducido.
+- [ ] UI móvil, safe areas, botones de al menos 44 px y movimiento reducido.
 - [ ] Resumen explica causalmente eventos importantes.
 - [ ] Sin push, tag o publicación antes de aprobación.
 
-## Cierre 3B — referencia actual
+## Cierre 3F — `v5.9.0-fase3F`
 
-- [x] Cuatro monstruos, máximo uno activo y spawn desde ronda 6.
-- [x] Mapa, leyenda, panel, saqueo y desafío visibles.
-- [x] Batalla boss, retirada, PV persistente y límite 180 s.
-- [x] Dos patrones por jefe con aviso.
-- [x] IA cazadora y recompensa inerte.
-- [x] Tutorial ligero y preferencia persistente.
-- [x] Suite **35/35**.
-- [ ] Publicación/tag de 3B autorizados y verificados en CI.
+- [x] Matriz declarativa completa de 36 cruces.
+- [x] Valores `×1.50`, `×0.75`, `×1.00` y `×0.00` aplicados.
+- [x] Reglas especiales de sanador, asedio, aérea y héroe verificadas.
+- [x] Duelo, boss y salpicadura secundaria excluidos correctamente.
+- [x] Reliquias y veteranía sin multiplicación duplicada.
+- [x] Botones con “Vence a / Débil contra / No alcanza”.
+- [x] Indicadores `▲/▼` y banner causal único por matchup.
+- [x] Ayuda rápida actualizada.
+- [x] Modo Balance registra matchups, bajas, estructuras, composiciones y unidades sin objetivo.
+- [x] Exportación JSON válida y datos anteriores compatibles.
+- [x] Build correcto.
+- [x] Suite **47/47**.
+- [x] Auditoría de contenido interno limpia.
+- [x] GitHub Pages verificado con HTTP 200.
+- [x] Prueba manual en PC aprobada.
+- [x] Prueba móvil aceptable: los controles no se rompen.
+- [x] Tag y publicación verificados por CI.
 
-## QA manual móvil 3B
+### Observación móvil no bloqueante
 
-- [ ] Ayuda `?`: encabezado sin desbordar.
-- [ ] Hoja inferior desplazable y cierre fijo.
-- [ ] “No volver a mostrar” persiste tras recarga.
-- [ ] Marcador/leyenda/panel no se superponen.
-- [ ] Patrones legibles con `SET.fx` activado y reducido.
-- [ ] Jefe dura aproximadamente 75–130 s; nunca supera 180 s.
-- [ ] Guardar/cargar conserva amenaza, saqueos, PV, intentos y recompensa.
+Los botones contienen bastante información, pero permanecen utilizables. Una fase visual futura podrá compactarlos si la evidencia móvil lo justifica, sin cambiar la matriz ni el balance.
 
-## Plantilla para fases futuras
+## Próximas puertas
 
-- [ ] Migración desde última versión publicada.
-- [ ] Pruebas unitarias de reglas y límites.
-- [ ] Prueba de simetría IA/jugador.
-- [ ] Prueba de no duplicación/reentrada.
-- [ ] Regresión de batalla normal, boss, 2J y escenarios.
-- [ ] Modo Balance registra las nuevas decisiones.
-- [ ] Tutorial actualizado sin prometer funciones inexistentes.
-- [ ] Sesión manual de 5–15 min y rendimiento móvil.
-- [ ] Decisión publicar/corregir registrada.
-
-## Feature freeze y 4A
-
-- [ ] 3C–3G publicadas.
-- [ ] Una semana sin bugs críticos.
-- [ ] Telemetría en rangos.
-- [ ] Freeze aprobado por Gabriel.
-- [ ] Inventario visual y presupuesto de assets aprobados.
+- [ ] 3D valida economía, reclutamiento y duración de partida.
+- [ ] 3E valida defensa territorial y respuesta antiaérea.
+- [ ] 3G consume las señales de 3F sin bonos ocultos.
+- [ ] Feature freeze aprobado antes de 4A.

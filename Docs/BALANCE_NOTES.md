@@ -1,18 +1,18 @@
 # Notas vivas de balance
 
-> Registrar números, evidencia y decisiones. No ajustar automáticamente por un benchmark roto.
+> Registrar números, evidencia y decisiones. Un benchmark roto genera una advertencia, nunca un ajuste automático.
 
 ## Línea base vigente
 
-- Fecha de referencia: 2026-07-18.
-- Estado: Fase 3B funcionalmente completa; 3C no iniciada.
-- Suite: **35/35**.
+- Fecha de referencia: 2026-07-19.
+- Versión pública: `v5.9.0-fase3F` (`3a85cbd`).
+- Suite: **47/47**.
 - Partida objetivo: 5–15 min.
-- Batalla normal: 60–210 s; benchmark de media 60–180 s.
+- Batalla normal: 60–210 s; benchmark medio 60–180 s.
 - Batalla boss: objetivo 75–130 s; corte de seguridad 180 s.
-- Spawn de monstruo: desde ronda 6, base `0.07`, Aleatoriedad Viva, máximo uno activo.
-- Saqueo: cada dos rondas.
-- IA cazadora: `DeseoCazar ≥ 0.55`, requisitos compartidos y daño persistente.
+- Matriz counter: ventaja `×1.50`, desventaja `×0.75`, neutral `×1.00`, inalcanzable `×0.00`.
+- Aérea contra estructura: `×0.75`; asedio contra estructura: `×1.00` hasta 3E.
+- Héroe contra pesada: `×0.85`; distancia contra héroe: neutral.
 
 ## Benchmarks
 
@@ -20,36 +20,44 @@
 |---|---:|---|
 | Uso de una unidad | ≤60% | Modo Balance |
 | Winrate de duelo por héroe | ≤65% | Modo Balance |
-| Ataques exitosos tras 3E | 40–60% | Telemetría futura |
 | Impacto de una reliquia | ≤5 puntos de winrate | Comparativa 3C |
-| Turno IA | <1 s móvil medio | Medición 3G |
-| Victoria humana candidata | Fácil 70% / Normal 50% / Difícil 30% | Calibración 3G |
+| Ataques exitosos tras 3E | 40–60% | Telemetría futura |
+| Turno IA | <1 s en móvil medio | Medición 3G |
+| Victoria humana futura | Fácil ~75% / Normal ~50% / Difícil ~30% / Pesadilla 10–15% | Calibración 3G |
 
-## Propuestas pendientes — no implementadas
+## Riesgos pendientes observados
 
-- 3C: efectos y número de slots de reliquia.
-- 3F: matriz 6×6; candidato `1.5× / 0.75×`.
-- 3D: crecimiento, mantenimiento, mejoras y activables.
-- 3E: costes/PV de torres y penalización de base.
-- 3G: nueva curva de decisión sin bonos ocultos adicionales.
+- Difícil sigue sintiéndose fácil para un jugador avanzado; corresponde a 3G.
+- Las unidades aéreas continúan mostrando daño alto; medir daño estructural y resultados antes de ajustar.
+- Pachacútec sigue fuerte en duelos; separar percepción manual de una muestra suficiente.
+- La IA puede desplegar unidades sin objetivo contra composiciones aéreas.
+- Distancia cubre pesada y aérea; medir uso, daño y resultados con más partidas.
+- No ajustar balance por intuición ni por una sola sesión.
 
-## Plantilla de decisión
+## Base para 3G
 
-### AAAA-MM-DD — título
+3F expone datos suficientes para decisiones futuras explicables:
 
-- **Fase / versión:**
-- **Problema observado:**
-- **Datos:** muestra, dificultad, duración, composición y resultado.
-- **Cambio propuesto:**
-- **Impacto esperado:**
-- **Riesgo:**
-- **Aprobación:** pendiente/aprobado/rechazado.
-- **Resultado posterior:**
+- matriz declarativa y restricciones de objetivo;
+- matchups y multiplicador aplicado;
+- unidades incapaces de atacar;
+- daño estructural por tipo;
+- composiciones y resultados;
+- propietario jugador/IA y contexto de reliquia.
+
+3G podrá usar estas señales para reclutar counters y responder a aérea, héroes y composiciones dominantes. Debe hacerlo con las mismas reglas, sin recursos ocultos, rubber-banding ni trampas.
+
+## Decisión vigente
+
+- **Fase / versión:** 3F / `v5.9.0-fase3F`.
+- **Resultado:** publicada y estable.
+- **Cambio posterior:** ninguno hasta reunir muestra suficiente o abrir la fase correspondiente.
+- **Aprobación:** cierre manual y técnico aprobado.
 
 ## Reglas
 
 1. Mecánica → Balance → Claridad → Estética.
-2. Un ajuste por experimento; no mover varios números a la vez.
+2. Un ajuste por experimento.
 3. Registrar también decisiones de no cambiar.
 4. Separar percepción manual de evidencia telemétrica.
 5. Ningún benchmark provoca un ajuste automático.
