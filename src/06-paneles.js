@@ -78,9 +78,22 @@ function renderTerr(){
       log(`Enviaste tributo a ${FACTIONS[fid].name}.`);render();},f.gold<20));
   }
 }
-function mkBtn(txt,fn,dis=false,cls=""){
+function mkBtn(txt,fn,dis=false,cls="",preserveRelicWindow=false){
   const b=document.createElement("button");b.className="act "+cls;b.textContent=txt;
-  b.disabled=dis;b.onclick=()=>{if(!b.disabled)fn();};return b;
+  b.disabled=dis;b.onclick=()=>{if(!b.disabled){if(!preserveRelicWindow)relicChangeOpen=false;fn();}};return b;
+}
+function renderRelicPanel(fid){
+  const state=currentRelicState(),owned=getEmpireRelics(state,fid),equipped=getEquippedRelic(state,fid);
+  if(!owned.length)return`<section class="relicPanel" id="relicPanel"><b>◆ Reliquia equipada · 1 slot</b>
+    <div class="relicEmpty">Aún no posees reliquias. Derrota una amenaza mítica para obtener una.</div></section>`;
+  return`<section class="relicPanel" id="relicPanel"><b>◆ Reliquia equipada · 1 slot</b>
+    <div class="relicSlot">${equipped?equipped.name:"— slot vacío —"}</div>
+    ${owned.map(relic=>`<article class="relicCard ${equipped&&equipped.id===relic.id?"equipped":""}" data-relic-id="${relic.id}">
+      <strong>${relic.name}</strong>${equipped&&equipped.id===relic.id?" · Equipada":""}<br>
+      <span>${relic.description}</span><br><small>${relic.restriction}</small>
+    </article>`).join("")}
+    <div class="relicPending">Efectos todavía en preparación; equipar no modifica estadísticas.</div>
+  </section>`;
 }
 function renderEmp(){
   const info=$("empInfo"),btns=$("empBtns");btns.innerHTML="";
@@ -101,8 +114,22 @@ function renderEmp(){
     <div class="row" style="opacity:.75">⚔️ Armamento nv${f.upArm} · 💰 Economía nv${f.upEco} · 🏥 Medicina nv${f.upMed}</div>
     ${coalition&&coalition.leader===player?`<div class="row" style="color:var(--danger)"><b>🌍 Coalición en tu contra: ${coalition.rounds} rondas</b></div>`:""}
     ${contHtml}
+    ${renderRelicPanel(player)}
     <div class="row" style="opacity:.7">Victoria: conquista total · 🎭${CULT_WIN} · ✨${FAITH_WIN}</div>`;
   if(phase!=="play")return;
+  const relics=getEmpireRelics(currentRelicState(),player),equippedRelic=getEquippedRelic(currentRelicState(),player);
+  const relicChangeAllowed=canChangeRelic(currentRelicState(),player);
+  for(const relic of relics){
+    if(equippedRelic&&equippedRelic.id===relic.id)continue;
+    btns.appendChild(mkBtn(`${equippedRelic?"Cambiar a":"Equipar"} ◆ ${relic.name}`,
+      ()=>{equipRelic(currentRelicState(),player,relic.id);render();},!relicChangeAllowed,"",true));
+  }
+  if(equippedRelic)btns.appendChild(mkBtn(`Retirar ◆ ${equippedRelic.name}`,
+    ()=>{unequipRelic(currentRelicState(),player);render();},!relicChangeAllowed,"danger",true));
+  if(relics.length&&!relicChangeAllowed){
+    const note=document.createElement("div");note.className="relicChangeNote";
+    note.textContent="Las reliquias solo pueden cambiarse al inicio del turno.";btns.appendChild(note);
+  }
   if(f.era<3){
     btns.appendChild(mkBtn(`Avanzar a ${ERAS[f.era+1]} (${ERA_COST[f.era+1]}🔬)`,()=>{
       f.science-=ERA_COST[f.era+1];f.era++;SFX.evolve();

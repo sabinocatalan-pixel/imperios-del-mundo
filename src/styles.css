@@ -155,6 +155,19 @@
   .heroMeta{opacity:.75;font-size:10.5px;margin-top:2px}
   .heroLock{margin-top:4px;font-size:10.5px;opacity:.8}
   .heroSlotTag{margin-top:4px;font-size:10px;color:var(--ok)}
+  .heroAbilitySummary{margin-top:6px;padding-top:5px;border-top:1px solid rgba(233,220,192,.16);
+    font-size:10px;line-height:1.35;color:var(--parchment)}
+  .heroAbilitySummary span{opacity:.78}
+  .heroAbilityDetail{margin-top:8px;padding:8px;border-left:3px solid var(--gold);
+    background:rgba(233,220,192,.06);font-size:12px;line-height:1.45}
+  .relicPanel{margin:8px 0;padding:8px;border:1px solid rgba(217,164,65,.55);border-radius:7px;
+    background:rgba(8,16,22,.45);font-size:11px}
+  .relicSlot{color:var(--gold);margin:4px 0 6px;font-weight:700}
+  .relicCard{padding:6px;margin-top:5px;border-left:3px solid var(--line);background:rgba(233,220,192,.04)}
+  .relicCard.equipped{border-left-color:var(--ok)}
+  .relicCard small,.relicPending,.relicEmpty{opacity:.72}
+  .relicPending,.relicEmpty{margin-top:6px}
+  .relicChangeNote{font-size:11px;opacity:.75;padding:4px 2px}
   /* ===== RESUMEN DEL TURNO ===== */
   .resumenLinea{border-left:3px solid var(--gold);padding:9px 11px;margin-bottom:8px;
     font-size:15px;line-height:1.4;background:rgba(233,220,192,.05);border-radius:0 4px 4px 0}

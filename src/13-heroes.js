@@ -13,8 +13,9 @@ const RAREZA_ORDEN = ["comun", "raro", "legendario", "mitico"];
 const HEROES = {
   leonidas: {
     id: "leonidas", name: "Leónidas", region: "Grecia", rarity: "comun",
-    tipoAtaque: "melee", locked: false,
-    habilidad: { tipo: "pasiva", nombre: "Muro de Escudos", desc: "Melee aliados +10% def mientras vive" },
+    tipoAtaque: "melee", rol: "Defensor", locked: false,
+    habilidad: { tipo: "pasiva", nombre: "Muro de Escudos", desc: "Melee aliados +10% def mientras vive",
+      cuando: "Mientras Leónidas está vivo en el campo", limitacion: "Termina cuando cae o acaba la batalla" },
     frase: "¡Ven a tomarlas!",
     leyenda: "Rey de Esparta, símbolo de resistencia frente a un imperio muchas veces mayor.",
     notaCultural: "Inspirado en la historia de Grecia; representación lúdica y educativa, no documental.",
@@ -26,32 +27,36 @@ const HEROES = {
   },
   suntzu: {
     id: "suntzu", name: "Sun Tzu", region: "China", rarity: "comun",
-    tipoAtaque: "ranged", locked: false,
-    habilidad: { tipo: "pasiva", nombre: "El Arte de la Guerra", desc: "Unidades cuestan −10% mientras está en campo" },
+    tipoAtaque: "ranged", rol: "Estratega", locked: false,
+    habilidad: { tipo: "pasiva", nombre: "El Arte de la Guerra", desc: "Unidades cuestan −10% mientras está en campo",
+      cuando: "Mientras Sun Tzu está vivo en el campo", limitacion: "Solo afecta unidades compradas durante su presencia" },
     frase: "Conoce a tu enemigo y conócete a ti mismo.",
     leyenda: "Estratega y autor de El arte de la guerra; su presencia abarata la maquinaria militar.",
     notaCultural: "Inspirado en la historia de China; representación lúdica y educativa, no documental."
   },
   boudica: {
     id: "boudica", name: "Boudica", region: "Britania", rarity: "comun",
-    tipoAtaque: "melee", locked: false,
-    habilidad: { tipo: "activa", nombre: "Carga Furiosa", desc: "Aliados +20% velocidad 6s", cd: 25 },
+    tipoAtaque: "melee", rol: "Impulsora", locked: false,
+    habilidad: { tipo: "activa", nombre: "Carga Furiosa", desc: "Aliados +20% velocidad 6s", cd: 25,
+      cuando: "Tócala cuando Boudica esté viva", limitacion: "Dura 6s; recarga 25s" },
     frase: "¡Cada aldea quemada será vengada!",
     leyenda: "Reina guerrera de los icenos; lideró la revuelta contra la ocupación romana en Britania.",
     notaCultural: "Inspirada en la historia de Britania; representación lúdica y educativa, no documental."
   },
   ollantay: {
     id: "ollantay", name: "Ollantay", region: "Andes", rarity: "comun",
-    tipoAtaque: "melee", locked: false,
-    habilidad: { tipo: "pasiva", nombre: "Corazón Rebelde", desc: "Al morir, tropas +15% daño 8s" },
+    tipoAtaque: "melee", rol: "Inspirador", locked: false,
+    habilidad: { tipo: "pasiva", nombre: "Corazón Rebelde", desc: "Al morir, tropas +15% daño 8s",
+      cuando: "Se activa automáticamente cuando Ollantay cae", limitacion: "El impulso dura 8s" },
     frase: "Mi corazón no se rinde ante ningún imperio.",
     leyenda: "Guerrero legendario de los Andes cuya rebeldía frente al Inca inspiró a generaciones.",
     notaCultural: "Inspirado en la tradición andina; representación lúdica y educativa, no documental."
   },
   anibal: {
     id: "anibal", name: "Aníbal", region: "Cartago", rarity: "raro",
-    tipoAtaque: "melee", locked: false,
-    habilidad: { tipo: "activa", nombre: "Flanqueo", desc: "Invoca 2 melee adelantados", cd: 35 },
+    tipoAtaque: "melee", rol: "Ofensivo", locked: false,
+    habilidad: { tipo: "activa", nombre: "Flanqueo", desc: "Invoca 2 melee adelantados", cd: 35,
+      cuando: "Tócala cuando Aníbal esté vivo", limitacion: "Invoca 2 unidades; recarga 35s" },
     frase: "Encontraremos un camino, o lo abriremos.",
     leyenda: "General cartaginés que cruzó los Alpes para desafiar a Roma en su propio territorio.",
     notaCultural: "Inspirado en la historia de Cartago; representación lúdica y educativa, no documental.",
@@ -63,8 +68,9 @@ const HEROES = {
   },
   tomoegozen: {
     id: "tomoegozen", name: "Tomoe Gozen", region: "Japón", rarity: "raro",
-    tipoAtaque: "melee", locked: false,
-    habilidad: { tipo: "pasiva", nombre: "Danza de la Naginata", desc: "Golpes con área pequeña" },
+    tipoAtaque: "melee", rol: "Duelista de área", locked: false,
+    habilidad: { tipo: "pasiva", nombre: "Danza de la Naginata", desc: "Golpes con área pequeña",
+      cuando: "Se aplica automáticamente en sus ataques", limitacion: "Área pequeña alrededor del objetivo" },
     frase: "Mi naginata no conoce el miedo.",
     leyenda: "Guerrera samurái célebre por su destreza con la naginata durante el periodo Heian.",
     notaCultural: "Inspirada en la historia de Japón; representación lúdica y educativa, no documental.",
@@ -76,8 +82,9 @@ const HEROES = {
   },
   pachacutec: {
     id: "pachacutec", name: "Pachacútec", region: "Tahuantinsuyo", rarity: "legendario",
-    tipoAtaque: "melee", locked: false,
-    habilidad: { tipo: "activa", nombre: "Reorganización Imperial", desc: "Cura 25% PV aliados + 10% def 10s", cd: 40 },
+    tipoAtaque: "melee", rol: "Apoyo imperial", locked: false,
+    habilidad: { tipo: "activa", nombre: "Reorganización Imperial", desc: "Cura 25% PV aliados + 10% def 10s", cd: 40,
+      cuando: "Tócala cuando Pachacútec esté vivo", limitacion: "Defensa dura 10s; recarga 40s" },
     consejo: { desc: "+1🪙/ronda por territorio sudamericano" },
     frase: "El imperio se construye con orden, no solo con la espada.",
     leyenda: "Noveno Sapa Inca; expandió y reorganizó el Tahuantinsuyo con una administración ejemplar.",
@@ -85,8 +92,9 @@ const HEROES = {
   },
   amaru: {
     id: "amaru", name: "Amaru", region: "Andes (mito)", rarity: "mitico",
-    tipoAtaque: "ranged", locked: true,
-    habilidad: { tipo: "pasiva", nombre: "Renacer de la Serpiente", desc: "1 vez/batalla: al morir renace con 50% PV + onda que aturde 1.5s" },
+    tipoAtaque: "ranged", rol: "Mítico resistente", locked: true,
+    habilidad: { tipo: "pasiva", nombre: "Renacer de la Serpiente", desc: "1 vez/batalla: al morir renace con 50% PV + onda que aturde 1.5s",
+      cuando: "Se activa automáticamente al caer", limitacion: "Una vez por batalla" },
     frase: "La serpiente que muere, siempre renace.",
     leyenda: "???",
     notaCultural: "Inspirado en la mitología andina; representación lúdica y educativa, no documental.",
@@ -234,6 +242,9 @@ function renderPanteon() {
       onclick="${unlocked ? `panteonCardClick('${id}')` : ""}">
       <div class="heroName">${unlocked ? hero.name : (hero.rarity === "mitico" ? "???" : hero.name)}</div>
       <div class="heroMeta">${hero.region} · ${RAREZA_LABEL[hero.rarity]}</div>
+      ${unlocked && hero.habilidad ? `<div class="heroAbilitySummary"><b>${hero.rol || "Héroe"}</b> · ${hero.habilidad.tipo === "activa" ? "Activa" : "Pasiva"}<br>
+        <strong>${hero.habilidad.nombre}</strong>: ${hero.habilidad.desc}<br>
+        <span>Cuándo: ${hero.habilidad.cuando}${hero.habilidad.cd ? ` · CD ${hero.habilidad.cd}s` : ""}</span></div>` : ""}
       ${unlocked ? "" : `<div class="heroLock">🔒 ${difficultyHeroLockText(hero)}</div>`}
       ${slot === 0 ? `<div class="heroSlotTag">⭐ activo</div>` : slot > 0 ? `<div class="heroSlotTag">consejo</div>` : ""}
     </div>`;
@@ -269,7 +280,10 @@ function renderFicha(id) {
       <div class="heroName">${unlocked ? hero.name : "???"}</div>
       <div class="heroMeta">${hero.region} · ${RAREZA_LABEL[hero.rarity]}${hero.tipoAtaque ? " · " + (hero.tipoAtaque === "melee" ? "🗡 melee" : "🏹 ranged") : ""}</div>
     </div>
-    ${unlocked && hero.habilidad ? `<div class="row" style="margin-top:8px"><b>${hero.habilidad.nombre}</b> (${hero.habilidad.tipo}${hero.habilidad.cd ? ", cd " + hero.habilidad.cd + "s" : ""})<br>${hero.habilidad.desc}</div>` : ""}
+    ${unlocked && hero.habilidad ? `<div class="heroAbilityDetail"><b>${hero.rol || "Héroe"} · Habilidad ${hero.habilidad.tipo}</b><br>
+      <strong>${hero.habilidad.nombre}</strong>: ${hero.habilidad.desc}<br>
+      <span>Cuándo: ${hero.habilidad.cuando}</span><br>
+      <span>Límite: ${hero.habilidad.limitacion}${hero.habilidad.cd ? ` · Cooldown ${hero.habilidad.cd}s` : ""}</span></div>` : ""}
     ${unlocked && hero.consejo ? `<div class="row" style="opacity:.85">Consejo: ${hero.consejo.desc}</div>` : ""}
     ${unlocked ? `<p style="margin-top:8px">${hero.leyenda}</p>` : `<div class="heroLock">🔒 ${hero.condDesc || ""}</div>`}
     ${unlocked ? `<p style="font-size:11px;opacity:.7">${hero.notaCultural}</p>` : ""}

@@ -1449,6 +1449,58 @@ test("Reliquias 3C-2: equipar, cambiar y retirar al inicio del turno", () => {
   }finally{closeGame(g);}
 });
 
+/* 38 (Fase 3C-3A). Claridad descriptiva de héroes y UI mínima del slot
+   de reliquia, todavía sin efectos funcionales. */
+test("Claridad UI: habilidades de héroes y reliquias propias", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");monsterState.rewards=[
+      getMonsterReward("kraken","AG","CAN",8),
+      getMonsterReward("long","AG","CHN",9),
+      getMonsterReward("amaru","SO","PER",9)
+    ];render();openPanteon("equipar","AG")`);
+
+    const panteon=g.doc.getElementById("panteonBody").textContent;
+    assert.ok(panteon.includes("Defensor")&&panteon.includes("Muro de Escudos"),"muestra rol y habilidad");
+    assert.ok(panteon.includes("Pasiva")&&panteon.includes("Activa"),"distingue tipos de habilidad");
+    assert.ok(panteon.includes("Cuándo:")&&panteon.includes("CD 25s"),"explica disparador y cooldown");
+    assert.ok(g.win.eval('Object.values(HEROES).every(h=>h.rol&&h.habilidad.cuando&&h.habilidad.limitacion)'),"los ocho héroes tienen metadata descriptiva");
+    g.win.eval('fichaHeroId="boudica";renderPanteon()');
+    const ficha=g.doc.getElementById("panteonBody").textContent;
+    assert.ok(ficha.includes("Impulsora · Habilidad activa")&&ficha.includes("Tócala cuando Boudica esté viva"));
+    assert.ok(ficha.includes("Límite:")&&ficha.includes("Cooldown 25s"));
+
+    g.win.eval('document.getElementById("panteonModal").style.display="none";render()');
+    const panel=g.doc.getElementById("relicPanel");
+    assert.ok(panel&&panel.textContent.includes("1 slot"));
+    assert.ok(panel.textContent.includes("Perla del Abismo")&&panel.textContent.includes("Aliento del Long"));
+    assert.ok(!panel.textContent.includes("Escama de Amaru"),"no lista reliquias ajenas");
+    assert.ok(panel.textContent.includes("Efectos todavía en preparación"));
+
+    const statsBefore=g.win.eval('JSON.stringify({gold:F.AG.gold,troops:T.CAN.troops,upArm:F.AG.upArm})');
+    let button=[...g.doc.querySelectorAll("#empBtns button")].find(b=>b.textContent.includes("Equipar ◆ Perla"));
+    assert.ok(button&&!button.disabled,"permite equipar al inicio");button.click();
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),"perla_abismo");
+    assert.ok(g.doc.getElementById("relicPanel").textContent.includes("Perla del Abismo · Equipada"));
+
+    button=[...g.doc.querySelectorAll("#empBtns button")].find(b=>b.textContent.includes("Cambiar a ◆ Aliento"));
+    assert.ok(button&&!button.disabled);button.click();
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),"aliento_long");
+    button=[...g.doc.querySelectorAll("#empBtns button")].find(b=>b.textContent.includes("Retirar ◆ Aliento"));
+    assert.ok(button&&!button.disabled);button.click();
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),null,"retira desde UI");
+    assert.strictEqual(g.win.eval('JSON.stringify({gold:F.AG.gold,troops:T.CAN.troops,upArm:F.AG.upArm})'),statsBefore,"la UI no activa efectos");
+
+    g.win.eval('relicChangeOpen=false;render()');
+    const locked=[...g.doc.querySelectorAll("#empBtns button")].filter(b=>b.textContent.includes("◆"));
+    assert.ok(locked.length&&locked.every(b=>b.disabled),"fuera del inicio los controles están bloqueados");
+    assert.ok(g.doc.getElementById("empBtns").textContent.includes("solo pueden cambiarse al inicio"));
+
+    g.win.eval('monsterState.rewards=[];render()');
+    assert.ok(g.doc.getElementById("relicPanel").textContent.includes("Aún no posees reliquias"));
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
