@@ -1827,6 +1827,51 @@ test("Counters 3F-3: claridad compacta y avisos causales", () => {
   }finally{closeGame(g);}
 });
 
+/* 47 (Fase 3F-4). El Modo Balance consolida matchups y estructuras sin
+   intervenir en reglas, y mantiene compatibilidad con datos anteriores. */
+test("Counters 3F-4: telemetría de matchups y estructuras", () => {
+  const g=makeGame();
+  try{
+    g.win.eval(`startGame(1);clickTerr("CAN");resetBalanceSession();T.EUN.owner="CO";
+      openBattle("CAN","EUN","attack");B.S["1"].relicEquippedId="aliento_long";
+      B.r=mkUnit(1,"ranged",2,0);B.a=mkUnit(-1,"air",2,0);B.m=mkUnit(1,"melee",2,0);B.er=mkUnit(-1,"ranged",2,0);
+      recordBattleCounterHit(B,B.r,B.a,1.5,30,true);
+      recordBattleCounterHit(B,B.er,B.m,0.75,12,false);
+      recordBattleCounterHit(B,B.a,B.a,1,8,false);
+      recordBattleStructureHit(B,B.a,18);
+      recordBattleStructureHit(B,mkUnit(1,"siege",2,0),25);
+      recordUnableToAttack(B,B.m,"air");recordUnableToAttack(B,mkUnit(1,"heavy",2,0),"air");
+      recordBalanceBattle(B,true,false);`);
+    const view=JSON.parse(g.win.eval('exportBalanceJSON()')).partida;
+    assert.strictEqual(view.matchups["ranged→air"].categoria,"favorable");
+    assert.strictEqual(view.matchups["ranged→air"].multiplicador,1.5);
+    assert.strictEqual(view.matchups["ranged→air"].danoTotal,30);
+    assert.strictEqual(view.matchups["ranged→air"].danoPromedio,30);
+    assert.strictEqual(view.matchups["ranged→air"].bajas,1);
+    assert.strictEqual(view.matchups["ranged→air"].propietariosAtacante.jugador,1);
+    assert.strictEqual(view.matchups["ranged→air"].propietariosDefensor.IA,1);
+    assert.strictEqual(view.matchups["ranged→air"].reliquias.aliento_long,1);
+    assert.strictEqual(view.matchups["ranged→melee"].categoria,"desfavorable");
+    assert.strictEqual(view.matchups["air→air"].categoria,"neutral");
+    assert.strictEqual(view.danoEstructurasPorTipo.air.danoTotal,18);
+    assert.strictEqual(view.danoEstructurasPorTipo.siege.danoTotal,25);
+    assert.strictEqual(view.danoEstructurasPorTipo.healer.danoTotal,0,"sanador figura siempre con cero");
+    assert.strictEqual(view.unidadesSinObjetivo["melee→air"].uses,1);
+    assert.strictEqual(view.unidadesSinObjetivo["heavy→air"].uses,1);
+    assert.ok(view.composiciones&&typeof view.composiciones==="object");
+
+    const exported=JSON.parse(g.win.eval('exportBalanceJSON()'));
+    assert.ok(exported.partida.matchups&&exported.partida.danoEstructurasPorTipo,"JSON exporta 3F-4");
+    g.win.localStorage.setItem("IDM_BALANCE_V1",JSON.stringify({battles:{count:1,durationTotal:80},games:{count:0,durationTotal:0}}));
+    assert.doesNotThrow(()=>g.win.eval('balanceView(loadBalanceTotal())'),"datos antiguos se normalizan");
+
+    assert.strictEqual(g.win.eval('recordBattleCounterHit({...B,mode:"boss"},B.r,B.a,1.5,20,true)'),false,"boss excluido");
+    assert.strictEqual(g.win.eval('recordBattleCounterHit(B,{...B.r,kind:"champ"},{...B.a,kind:"champ"},1.5,20,true)'),false,"duelo excluido");
+    const before=g.win.eval('JSON.stringify(COUNTER_MATRIX)');g.win.eval('balanceBenchmarks(loadBalanceTotal())');
+    assert.strictEqual(g.win.eval('JSON.stringify(COUNTER_MATRIX)'),before,"telemetría no autoajusta la matriz");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

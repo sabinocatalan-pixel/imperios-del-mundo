@@ -186,7 +186,7 @@ function openBattle(from,to,mode){
     pHP:0,pMax:0,eHP:0,eMax:0,
     units:[],projs:[],dmgs:[],pufs:[],corpses:[],btnRefs:[],
     duel:null,duelDone:false,
-    banner:null,bannerQueue:[],counterNotices:{},
+    banner:null,bannerQueue:[],counterNotices:{},counterTelemetry:{matchups:{},structures:{},unable:{}},
     pacing:{tension:false,muerteSubita:false,desgaste:false,resuelto:false},
     stones:Array.from({length:14},(_,i)=>({x:80+((i*137)%800),w:4+((i*53)%9),h:2+((i*31)%4)})),
     last:performance.now(),
@@ -701,7 +701,9 @@ function bloop(now){
       }
       // La misma fuente declarativa decide qué tipos pueden seleccionarse.
       // En boss se conserva el comportamiento aislado anterior.
-      const foes=B.units.filter(v=>v.side!==u.side&&v.hp>0&&canTargetKind(u.kind,v.kind,
+      const enemies=B.units.filter(v=>v.side!==u.side&&v.hp>0);
+      for(const kind of new Set(enemies.map(v=>v.kind)))if(!canTargetKind(u.kind,kind,{battleType:B.mode}))recordUnableToAttack(B,u,kind);
+      const foes=enemies.filter(v=>canTargetKind(u.kind,v.kind,
         {battleType:B.mode,duel:u.kind==="champ"&&v.kind==="champ"}));
       const siegeSuppressed=u.kind==="siege"&&foes.some(v=>v.kind==="melee"&&Math.abs(v.x-u.x)<u.minRng);
       let tgt=null,dist=Infinity;
@@ -757,6 +759,8 @@ function bloop(now){
           announceCounterOnce(u,tgt,mult);
           const dm=u.dmg*mult*dmgMultOut*dmgTakenMult(tgt);
           tgt.hp-=dm;tgt.flash=0.15;SFX.hit();
+          const killed=tgt.hp<=0&&!(tgt.kind==="champ"&&tgt.heroId==="amaru"&&!B.S[String(tgt.side)].amaruRevived);
+          recordBattleCounterHit(B,u,tgt,mult,dm,killed);
           B.S[String(u.side)].dmgDealt+=dm;
           B.S[String(u.side)].damageByType[u.kind]=(B.S[String(u.side)].damageByType[u.kind]||0)+dm;
           B.dmgs.push({x:tgt.x,y:GROUND-52*tgt.size,txt:(mult>1?"▲ ":(mult<1?"▼ ":""))+Math.round(dm),t:0.6,
@@ -806,6 +810,7 @@ function bloop(now){
           const baseMult=B.pacing.muerteSubita?1.2:1; // muerte súbita: bases +20% daño recibido
           const structureMult=getStructureMultiplier(u.kind,{battleType:B.mode});
           const dmgToBase=u.dmg*structureMult*dmgMultOut*baseMult;
+          recordBattleStructureHit(B,u,dmgToBase);
           if(u.side===1){B.eHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           else{B.pHP-=dmgToBase;if(SET.fx)B.shake=Math.max(B.shake,3);}
           B.S[String(u.side)].dmgDealt+=dmgToBase;
@@ -1110,7 +1115,7 @@ function finishBattle(win,retreat=false){
   if(!B||B.over)return;
   if(B.mode==="boss")return finishBossBattle(win,retreat);
   B.over=true;B.result=win;
-  recordBalanceBattle(B,win);
+  recordBalanceBattle(B,win,retreat);
   const me=B.pFacId,foe=B.eFacId;
   // progreso de armas alternativas (por partida): Aníbal cuenta victorias con él activo,
   // Leónidas cuenta batallas completas sobreviviendo (gane o pierda el bando).
