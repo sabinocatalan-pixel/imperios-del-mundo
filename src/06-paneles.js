@@ -48,10 +48,20 @@ function renderTerr(){
       ()=>prepareMonsterChallenge(player),!challenge.ok,"danger"));
   }
   if(mine){
-    const rec=mkBtn(`Reclutar +4 (12🪙 5🌾)`,()=>{f.gold-=12;f.food-=5;
-      t.troops=Math.min(99,t.troops+4);SFX.spawn();log(`Reclutaste tropas en ${d.n}.`);render();},
-      f.gold<12||f.food<5);
+    const recruitment=recruitmentEvaluation(currentStrategicRecruitmentState(),player,selected);
+    const partial=recruitment.ok&&recruitment.actualAmount<STRATEGIC_RECRUITMENT.baseAmount;
+    const recLabel=recruitment.ok
+      ?`Reclutar ${partial?"parcial ":""}+${recruitment.actualAmount} (${recruitment.cost.gold}🪙 ${recruitment.cost.food}🌾)`
+      :`Reclutar · ${recruitment.reason}`;
+    const rec=mkBtn(recLabel,()=>{
+      const result=applyStrategicRecruitment(currentStrategicRecruitmentState(),player,selected);
+      if(!result.ok){setStatus(result.reason);render();return;}
+      SFX.spawn();log(`${result.partial?"Reclutamiento parcial":"Reclutamiento"}: +${result.amount} tropas en ${d.n} (${result.cost.gold}🪙 ${result.cost.food}🌾).`);
+      render();
+    },!recruitment.ok);
     btns.appendChild(rec);
+    if(!recruitment.ok){const note=document.createElement("div");note.className="relicChangeNote";
+      note.textContent=recruitment.reason;btns.appendChild(note);}
     if(t.base<3){
       const c=30+t.base*25;
       btns.appendChild(mkBtn(`Base → nv${t.base+1} (${c}🪙)`,()=>{f.gold-=c;t.base++;

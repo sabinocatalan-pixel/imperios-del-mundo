@@ -881,7 +881,7 @@ test("IA usa sanador y asedio; save vigente conserva veteranía de apoyo", async
 
     g.win.eval('F.AG.veterancy.healer.xp=30;F.AG.veterancy.siege.xp=80;');
     const code=g.win.eval('saveGame()');
-    assert.strictEqual(g.win.eval(`JSON.parse(decodeURIComponent(escape(atob(${JSON.stringify(code)})))).v`),6);
+    assert.strictEqual(g.win.eval(`JSON.parse(decodeURIComponent(escape(atob(${JSON.stringify(code)})))).v`),7);
     g.win.eval('F.AG.veterancy.healer.xp=0;loadGame('+JSON.stringify(code)+')');
     assert.strictEqual(g.win.eval('F.AG.veterancy.healer.xp'),30);
     assert.strictEqual(g.win.eval('F.AG.veterancy.siege.xp'),80);
@@ -1403,8 +1403,8 @@ test("Reliquias 3C-1: datos, propiedad y migración v6", () => {
     assert.strictEqual(g.win.eval('validateEquippedRelic({monsterState,factions:F},"AG")'),null);
     assert.strictEqual(g.win.eval('monsterState.rewards.some(r=>r.sourceMonster==="amaru"&&r.earnedBy==="SO")'),true,"conserva 3B");
 
-    const v6=g.win.eval('JSON.parse(decodeURIComponent(escape(atob(saveGame())))).v');
-    assert.strictEqual(v6,6,"los guardados nuevos son v6");
+    const currentVersion=g.win.eval('JSON.parse(decodeURIComponent(escape(atob(saveGame())))).v');
+    assert.strictEqual(currentVersion,7,"los guardados nuevos son v7");
     assert.strictEqual(g.win.eval('inBattle'),false,"la migración no abre ni altera batalla");
   }finally{closeGame(g);}
 });
@@ -1917,13 +1917,74 @@ test("Recursos 3D-1: capacidad y reclutamiento estratégico declarativos", () =>
     assert.strictEqual(territoryLimit.territoryRecruitments,1);assert.strictEqual(territoryLimit.maxRecruitable,0);
     assert.ok(g.win.eval('getRecruitmentBlockReason({T,F,recruitmentState:{byEmpire:{AG:1},byTerritory:{A:1}}},"AG","A",4).includes("ya reclutó")'));
 
-    // El reclutamiento real sigue intacto en 3D-1 y el save continúa en v6.
-    const panelSource=fs.readFileSync(path.join(__dirname,"..","src","06-paneles.js"),"utf8");
-    assert.ok(panelSource.includes('t.troops=Math.min(99,t.troops+4)'),"el botón real aún no consume el modelo");
-    g.win.eval('reset();startGame(1);clickTerr("CAN")');
-    const saved=g.win.eval('saveGame()'),decoded=JSON.parse(Buffer.from(saved,"base64").toString("utf8"));
-    assert.strictEqual(decoded.v,6,"sin estado persistente nuevo no cambia la versión del save");
-    assert.strictEqual(g.win.eval('loadGame('+JSON.stringify(saved)+')'),true,"el save actual conserva round-trip");
+    assert.strictEqual(g.win.eval('typeof applyStrategicRecruitment'),"function","el modelo expone una ejecución común para 3D-2");
+  }finally{closeGame(g);}
+});
+
+/* 49 (Fase 3D-2). Jugador e IA consumen la misma ejecución, los límites se
+   reinician por ronda y save v7 evita eludirlos mediante recarga. */
+test("Recursos 3D-2: reclutamiento limitado, simétrico y persistente", () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN");F.AG.gold=100;F.AG.food=100;selected="CAN";render()');
+    const before=g.win.eval('T.CAN.troops');
+    let button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button&&!button.disabled,"el jugador puede reclutar con capacidad");button.click();
+    assert.strictEqual(g.win.eval('T.CAN.troops'),before+4);assert.strictEqual(g.win.eval('F.AG.gold'),88);assert.strictEqual(g.win.eval('F.AG.food'),95);
+    assert.strictEqual(g.win.eval('recruitmentState.byEmpire.AG'),1);assert.strictEqual(g.win.eval('recruitmentState.byTerritory.CAN'),1);
+    button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.disabled&&button.textContent.includes("ya reclutó"),"no permite repetir territorio");
+
+    g.win.eval('selected="USA";render()');button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button&&!button.disabled);button.click();assert.strictEqual(g.win.eval('recruitmentState.byEmpire.AG'),2);
+    g.win.eval('selected="MEX";render()');button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.disabled&&button.textContent.includes("2 reclutamientos"),"límite imperial visible");
+
+    g.win.eval('recruitmentState=emptyRecruitmentState(round);ownedBy("AG").forEach(id=>T[id].troops=1);T.CAN.troops=getTerritoryTroopCapacity(T.CAN);selected="CAN";render()');
+    button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.disabled&&button.textContent.includes("local completa"),"territorio lleno queda bloqueado");
+    g.win.eval('T.CAN.troops=8;ownedBy("AG").forEach(id=>T[id].troops=T[id].pop);selected="CAN";render()');
+    button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.disabled&&button.textContent.includes("imperial completa"),"capacidad imperial queda bloqueada");
+    g.win.eval('T.CAN.troops++');const troopsBefore=g.win.eval('T.CAN.troops');g.win.eval('render()');
+    assert.strictEqual(g.win.eval('T.CAN.troops'),troopsBefore,"estar sobre capacidad no borra tropas");
+
+    g.win.eval('ownedBy("AG").forEach(id=>T[id].troops=1);T.CAN.troops=getTerritoryTroopCapacity(T.CAN)-2;F.AG.gold=20;F.AG.food=20;recruitmentState=emptyRecruitmentState(round);selected="CAN";render()');
+    button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.textContent.includes("parcial")&&button.textContent.includes("+2"));button.click();
+    assert.strictEqual(g.win.eval('F.AG.gold'),14);assert.strictEqual(g.win.eval('F.AG.food'),17,"cobra 6 oro y 3 comida");
+    assert.ok(g.win.eval('document.getElementById("log").textContent.includes("Reclutamiento parcial: +2")'));
+
+    g.win.eval('recruitmentState=emptyRecruitmentState(round);T.CAN.troops=1;F.AG.gold=0;F.AG.food=20;selected="CAN";render()');
+    button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.disabled&&button.textContent.includes("Falta oro"));
+    g.win.eval('F.AG.gold=20;F.AG.food=0;render()');button=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(button.disabled&&button.textContent.includes("Falta comida"));
+
+    // La IA usa applyStrategicRecruitment y busca otro territorio si uno está lleno.
+    g.win.eval(`recruitmentState=emptyRecruitmentState(round);F.CO.gold=100;F.CO.food=100;
+      const co=ownedBy("CO");co.forEach(id=>T[id].troops=1);T[co[0]].troops=getTerritoryTroopCapacity(T[co[0]]);
+      applyStrategicRecruitment(currentStrategicRecruitmentState(),"CO",co[1]);`);
+    assert.strictEqual(g.win.eval('recruitmentState.byEmpire.CO'),1,"IA usa el helper común");
+    assert.strictEqual(g.win.eval('canRecruitStrategicTroops(currentStrategicRecruitmentState(),"CO",ownedBy("CO")[0])'),false,"IA tampoco puede usar territorio lleno");
+    g.win.eval('applyStrategicRecruitment(currentStrategicRecruitmentState(),"CO",ownedBy("CO")[2])');
+    const aiTroops=g.win.eval('getEmpireTroopsUsed(currentStrategicRecruitmentState(),"CO")');
+    assert.strictEqual(g.win.eval('applyStrategicRecruitment(currentStrategicRecruitmentState(),"CO",ownedBy("CO")[0]).ok'),false);
+    assert.strictEqual(g.win.eval('getEmpireTroopsUsed(currentStrategicRecruitmentState(),"CO")'),aiTroops,"IA no supera dos reclutamientos");
+
+    g.win.eval('recruitmentState.byEmpire.AG=1;recruitmentState.byTerritory.CAN=1');
+    const saved=g.win.eval('saveGame()');
+    assert.strictEqual(g.win.eval('JSON.parse(decodeURIComponent(escape(atob('+JSON.stringify(saved)+')))).v'),7);
+    g.win.eval('recruitmentState=emptyRecruitmentState(round);loadGame('+JSON.stringify(saved)+')');
+    assert.strictEqual(g.win.eval('recruitmentState.byEmpire.AG'),1,"save conserva contador humano");
+    assert.strictEqual(g.win.eval('recruitmentState.byEmpire.CO'),2,"save conserva contador IA");
+    const v6=g.win.eval(`(()=>{const d=JSON.parse(decodeURIComponent(escape(atob(${JSON.stringify(saved)}))));d.v=6;delete d.recruitmentState;
+      return btoa(unescape(encodeURIComponent(JSON.stringify(d))))})()`);
+    assert.strictEqual(g.win.eval('loadGame('+JSON.stringify(v6)+')'),true,"save v6 migra");
+    assert.strictEqual(g.win.eval('recruitmentState.round'),g.win.eval('round'));assert.deepStrictEqual(Object.keys(g.win.eval('recruitmentState.byEmpire')),[]);
+
+    g.win.eval('recruitmentState.byEmpire.AG=2;recruitmentState.byTerritory.CAN=1;round++;startRound()');
+    assert.strictEqual(g.win.eval('recruitmentState.round'),g.win.eval('round'));assert.deepStrictEqual(Object.keys(g.win.eval('recruitmentState.byEmpire')),[],"nueva ronda reinicia límites");
   }finally{closeGame(g);}
 });
 

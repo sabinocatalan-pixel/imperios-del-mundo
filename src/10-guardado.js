@@ -10,8 +10,8 @@ function loadLegacy(code){
 }
 
 /* ==================== GUARDADO (Base64) ====================
-   v6 (Fase 3C): añade el slot de reliquia y normaliza las recompensas de
-   monstruos. Conserva las migraciones previas y acepta saves v1-v5. */
+   v7 (Fase 3D): persiste los límites de reclutamiento del turno para que
+   recargar no permita eludirlos. Conserva migración desde v1-v6. */
 function migrateFactionToV5(f){
   if(!f.heroes){
     f.heroes=[null,null,null];
@@ -29,17 +29,18 @@ function migrateFactionToV5(f){
 }
 function saveGame(){
   if(!player){return "";}
-  const data={v:6,T,Fx:F,player,round,diffMult,rel,humans,
+  const data={v:7,T,Fx:F,player,round,diffMult,rel,humans,
     pacts:pacts.map(p=>({a:p.a,b:p.b,type:p.type,rounds:p.rounds,coalition:!!p.coalition})),
     mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,
-    coalition,coalitionCooldownUntil,eventHistory,warHistory,monsterState};
+    coalition,coalitionCooldownUntil,eventHistory,warHistory,monsterState,recruitmentState};
   return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
 }
 function loadGame(code){
   try{
     const d=JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
-    if(![1,2,3,4,5,6].includes(d.v))throw 0;
+    if(![1,2,3,4,5,6,7].includes(d.v))throw 0;
     T=d.T;F=d.Fx;player=d.player;round=d.round;diffMult=d.diffMult;
+    recruitmentState=normalizeRecruitmentState(d.recruitmentState,round);
     for(const fid in F)migrateFactionToV5(F[fid]);
     humans=d.humans||[d.player];turnIdx=0;pendingOffer=null;player=humans[0];
     rel=d.rel;pacts=d.pacts||[];coalition=d.coalition||null;

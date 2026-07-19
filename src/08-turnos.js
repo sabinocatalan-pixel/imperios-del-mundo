@@ -4,6 +4,7 @@
 function startPlayerTurn(){startRound();} // alias para compatibilidad
 function startRound(){
   turnSummaryLines=[]; // nueva ronda: reinicia lo que verá el Resumen del turno
+  recruitmentState=emptyRecruitmentState(round);
   autoSaveGame();
   incomePhase();
   resetMonsterAttemptsForRound(monsterState,round);
@@ -145,8 +146,11 @@ function aiTurns(fromTurnFlow){
     // economía según personalidad
     const spend=P.eco>0.6?0.5:0.75;
     if(f.gold>=25&&Math.random()<spend+0.25){
-      const t=T[mineAll[Math.floor(Math.random()*mineAll.length)]];
-      if(t){f.gold-=14;t.troops=Math.min(99,t.troops+4);}
+      // Misma capacidad, costes y límites que el jugador. Si el primer
+      // territorio está lleno, usa cualquier otro origen válido sencillo.
+      const valid=mineAll.map(id=>({id,e:recruitmentEvaluation(currentStrategicRecruitmentState(),fid,id)})).filter(x=>x.e.ok);
+      const choice=valid[Math.floor(Math.random()*valid.length)];
+      if(choice)applyStrategicRecruitment(currentStrategicRecruitmentState(),fid,choice.id);
     }
     if(f.era<3&&f.science>=ERA_COST[f.era+1]){f.science-=ERA_COST[f.era+1];f.era++;
       log(`${P.name} avanzó a la ${ERAS[f.era]}.`);}
