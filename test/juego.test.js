@@ -1711,6 +1711,42 @@ test("QA 3C-6: Aliento también potencia unidades básicas de IA", () => {
   }finally{closeGame(g);}
 });
 
+/* 44 (Fase 3F-1). Matriz aprobada disponible como datos y helpers;
+   counterMult() conserva el balance efectivo anterior hasta 3F-2. */
+test("Counters 3F-1: matriz declarativa completa sin alterar combate", () => {
+  const g=makeGame();
+  try{
+    const types=JSON.parse(g.win.eval("JSON.stringify(COUNTER_TYPES)"));
+    assert.deepStrictEqual(types,["melee","ranged","heavy","healer","siege","air"]);
+    const expected={
+      melee: {melee:1,ranged:1.5,heavy:0.75,healer:1,siege:1.5,air:0},
+      ranged:{melee:0.75,ranged:1,heavy:1.5,healer:1,siege:1,air:1.5},
+      heavy: {melee:1.5,ranged:0.75,heavy:1,healer:1,siege:1,air:0},
+      healer:{melee:0,ranged:0,heavy:0,healer:0,siege:0,air:0},
+      siege: {melee:1,ranged:1,heavy:1,healer:1,siege:1,air:0},
+      air:   {melee:1,ranged:1,heavy:1.5,healer:1,siege:1.5,air:1}
+    };
+    assert.deepStrictEqual(JSON.parse(g.win.eval("JSON.stringify(COUNTER_MATRIX)")),expected,"contiene exactamente los 36 cruces aprobados");
+    for(const attacker of types)for(const defender of types)
+      assert.strictEqual(g.win.eval(`getCounterMultiplier("${attacker}","${defender}")`),expected[attacker][defender]);
+    assert.strictEqual(g.win.eval('canTargetKind("melee","air")'),false);
+    assert.strictEqual(g.win.eval('canTargetKind("heavy","air")'),false);
+    assert.strictEqual(g.win.eval('canTargetKind("siege","air")'),false);
+    assert.strictEqual(g.win.eval('canTargetKind("healer","melee")'),false,"sanador no ataca");
+    assert.strictEqual(g.win.eval('getStructureMultiplier("air")'),0.75);
+    assert.strictEqual(g.win.eval('getStructureMultiplier("siege")'),1);
+    assert.strictEqual(g.win.eval('getCounterMultiplier("hero","heavy")'),0.85);
+    assert.strictEqual(g.win.eval('getCounterMultiplier("ranged","hero")'),1);
+    assert.deepStrictEqual(JSON.parse(g.win.eval('JSON.stringify(getStrongTargets("ranged"))')),["heavy","air"]);
+    assert.deepStrictEqual(JSON.parse(g.win.eval('JSON.stringify(getWeakAgainst("siege"))')),["melee","air"]);
+    const siege=JSON.parse(g.win.eval('JSON.stringify(getCounterDescription("siege"))'));
+    assert.strictEqual(siege.role,"indirect");assert.strictEqual(siege.minRange,80);
+    assert.deepStrictEqual(siege.suppressedBy,["melee"]);
+    assert.strictEqual(g.win.eval('counterMult({kind:"melee"},{kind:"ranged"})'),1.5);
+    assert.strictEqual(g.win.eval('counterMult({kind:"ranged"},{kind:"melee"})'),0.66,"el combate real aún conserva 3C");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
