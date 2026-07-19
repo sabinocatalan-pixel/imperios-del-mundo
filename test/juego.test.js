@@ -868,9 +868,9 @@ test("Asedio: arco, rango mínimo, prioridad de base y vulnerabilidad coherente"
   }finally{closeGame(g);}
 });
 
-/* 25 (Fase 3A). La IA despliega los dos apoyos con spawnUnit y el save v5
+/* 25 (Fase 3A). La IA despliega los dos apoyos con spawnUnit y el save vigente
    conserva/migra su veteranía. */
-test("IA usa sanador y asedio; save v5 migra veteranía de apoyo", async () => {
+test("IA usa sanador y asedio; save vigente conserva veteranía de apoyo", async () => {
   const g=makeGame();
   try{
     g.win.eval('startGame(1);clickTerr("CAN");clickTerr("CAN");clickTerr("EUN");Math.random=()=>0;B.S["-1"].gold=999;B.eCool=0;');
@@ -881,7 +881,7 @@ test("IA usa sanador y asedio; save v5 migra veteranía de apoyo", async () => {
 
     g.win.eval('F.AG.veterancy.healer.xp=30;F.AG.veterancy.siege.xp=80;');
     const code=g.win.eval('saveGame()');
-    assert.strictEqual(g.win.eval(`JSON.parse(decodeURIComponent(escape(atob(${JSON.stringify(code)})))).v`),5);
+    assert.strictEqual(g.win.eval(`JSON.parse(decodeURIComponent(escape(atob(${JSON.stringify(code)})))).v`),6);
     g.win.eval('F.AG.veterancy.healer.xp=0;loadGame('+JSON.stringify(code)+')');
     assert.strictEqual(g.win.eval('F.AG.veterancy.healer.xp'),30);
     assert.strictEqual(g.win.eval('F.AG.veterancy.siege.xp'),80);
@@ -1363,6 +1363,49 @@ test("Ayuda rápida: abre, cierra y recuerda la preferencia", () => {
     assert.strictEqual(panel.hidden,true);
     g.win.eval('inBattle=false;openQuickHelp(false);T.CAN.owner="AG";T.EUN.owner="CO";openBattle("CAN","EUN","attack")');
     assert.strictEqual(panel.hidden,true,"una batalla cierra la ayuda que ya estaba abierta");
+  }finally{closeGame(g);}
+});
+
+/* 36 (Fase 3C-1). Catálogo, propiedad derivada y migración v5 a v6,
+   sin activar todavía efectos de reliquias. */
+test("Reliquias 3C-1: datos, propiedad y migración v6", () => {
+  const g=makeGame();
+  try{
+    g.win.eval('startGame(1);clickTerr("CAN")');
+    assert.strictEqual(g.win.eval('Object.keys(RELICS).length'),4,"existen exactamente cuatro reliquias");
+    assert.deepStrictEqual(Array.from(g.win.eval('Object.values(RELICS).map(r=>r.sourceMonster).sort()')),
+      ["amaru","anubis","kraken","long"]);
+    assert.ok(g.win.eval('Object.values(RELICS).every(r=>r.id&&r.name&&r.rewardId&&r.description&&r.effect&&r.restriction&&r.inertUntilEquipped&&r.help)'));
+    assert.ok(g.win.eval('Object.keys(MONSTERS).every(id=>getRelicByMonster(id))'));
+    assert.ok(g.win.eval('Object.keys(F).every(id=>F[id].equippedRelic===null)'),"el slot inicia vacío");
+
+    g.win.eval(`monsterState.rewards=[
+      getMonsterReward("kraken","AG","CAN",8),
+      getMonsterReward("amaru","SO","PER",9),
+      {...getMonsterReward("kraken","AG","CAN",8),relicId:undefined}
+    ]`);
+    assert.strictEqual(g.win.eval('getRelicByReward(monsterState.rewards[0]).id'),"perla_abismo");
+    assert.deepStrictEqual(Array.from(g.win.eval('getEmpireRelics(monsterState,"AG").map(r=>r.id)')),["perla_abismo"]);
+    assert.strictEqual(g.win.eval('ownsRelic(monsterState,"AG","perla_abismo")'),true);
+    assert.strictEqual(g.win.eval('ownsRelic(monsterState,"SO","perla_abismo")'),false);
+    assert.strictEqual(g.win.eval('validateEquippedRelic({monsterState,factions:{SO:{equippedRelic:"escama_amaru"}}},"SO")'),"escama_amaru");
+
+    const oldCode=g.win.eval(`(()=>{const d=JSON.parse(decodeURIComponent(escape(atob(saveGame()))));
+      d.v=5;delete d.Fx.SO.equippedRelic;d.Fx.AG.equippedRelic="escama_amaru";
+      d.monsterState.rewards.forEach(r=>delete r.relicId);
+      return btoa(unescape(encodeURIComponent(JSON.stringify(d))));})()`);
+    g.win.eval('monsterState=emptyMonsterState();F.AG.equippedRelic="perla_abismo"');
+    assert.strictEqual(g.win.eval('loadGame('+JSON.stringify(oldCode)+')'),true,"save v5 migra");
+    assert.strictEqual(g.win.eval('monsterState.rewards.length'),2,"deduplica el inventario efectivo");
+    assert.strictEqual(g.win.eval('monsterState.rewards[0].relicId'),"perla_abismo");
+    assert.ok(g.win.eval('monsterState.rewards.every(r=>r.inert)'),"las recompensas siguen inertes");
+    assert.strictEqual(g.win.eval('F.AG.equippedRelic'),null,"limpia una reliquia ajena");
+    assert.strictEqual(g.win.eval('validateEquippedRelic({monsterState,factions:F},"AG")'),null);
+    assert.strictEqual(g.win.eval('monsterState.rewards.some(r=>r.sourceMonster==="amaru"&&r.earnedBy==="SO")'),true,"conserva 3B");
+
+    const v6=g.win.eval('JSON.parse(decodeURIComponent(escape(atob(saveGame())))).v');
+    assert.strictEqual(v6,6,"los guardados nuevos son v6");
+    assert.strictEqual(g.win.eval('inBattle'),false,"la migración no abre ni altera batalla");
   }finally{closeGame(g);}
 });
 

@@ -40,6 +40,84 @@ const MONSTERS={
   }
 };
 
+/* Fase 3C-1: catálogo declarativo. Los efectos permanecen inertes hasta
+   que una fase posterior implemente equipamiento y combate. */
+const RELICS={
+  perla_abismo:{
+    id:"perla_abismo",name:"Perla del Abismo",sourceMonster:"kraken",rewardId:"fragmento_abismo",
+    description:"Una perla nacida de las profundidades dominadas por el Kraken.",
+    effect:{type:"coastal_defense_damage_reduction",value:0.10},
+    restriction:"Solo al defender un territorio costero.",inertUntilEquipped:true,
+    help:"Reduce un 10% el daño recibido al defender una costa cuando está equipada."
+  },
+  escama_amaru:{
+    id:"escama_amaru",name:"Escama de Amaru",sourceMonster:"amaru",rewardId:"escama_amaru",
+    description:"Una escama legendaria que transmite la resistencia del Amaru.",
+    effect:{type:"hero_max_hp",value:0.10},
+    restriction:"Solo durante la batalla; no afecta duelos.",inertUntilEquipped:true,
+    help:"Otorga un 10% más de PV máximos al héroe desplegado cuando está equipada."
+  },
+  aliento_long:{
+    id:"aliento_long",name:"Aliento del Long",sourceMonster:"long",rewardId:"perla_long",
+    description:"Un vestigio del poder celeste del Long para encabezar una ofensiva.",
+    effect:{type:"first_offensive_units_damage",value:0.10,unitCount:3,exclude:["healer"]},
+    restriction:"Solo al atacar; primeras 3 unidades ofensivas; excluye sanadores.",inertUntilEquipped:true,
+    help:"Mejora un 10% el daño de las primeras 3 unidades ofensivas al atacar."
+  },
+  ankh_anubis:{
+    id:"ankh_anubis",name:"Ankh de Anubis",sourceMonster:"anubis",rewardId:"sello_anubis",
+    description:"Un símbolo funerario legendario asociado al juicio de Anubis.",
+    effect:{type:"troop_recovery_after_defense",value:0.15,maxTroops:3,usesPerRound:1},
+    restriction:"Tras una defensa ganada; máximo 3 tropas; una vez por ronda.",inertUntilEquipped:true,
+    help:"Recupera un 15% de las tropas perdidas tras defender con éxito, hasta 3."
+  }
+};
+
+function getRelicById(id){return RELICS[id]||null;}
+function getRelicByMonster(monsterId){return Object.values(RELICS).find(r=>r.sourceMonster===monsterId)||null;}
+function getRelicByReward(reward){
+  if(!reward||typeof reward!=="object")return null;
+  return getRelicById(reward.relicId)||getRelicByMonster(reward.sourceMonster)||
+    Object.values(RELICS).find(r=>r.rewardId===reward.id)||null;
+}
+function relicStateParts(state){
+  return state&&state.monsterState
+    ?{monsterState:state.monsterState,factions:state.factions||state.Fx||{}}
+    :{monsterState:state||emptyMonsterState(),factions:typeof F==="object"&&F||{}};
+}
+function getEmpireRelics(state,empireId){
+  const {monsterState:ms}=relicStateParts(state),seen=new Set(),result=[];
+  for(const reward of ms.rewards||[]){
+    const relic=getRelicByReward(reward);
+    if(reward.earnedBy===empireId&&relic&&!seen.has(relic.id)){seen.add(relic.id);result.push(relic);}
+  }
+  return result;
+}
+function ownsRelic(state,empireId,relicId){return getEmpireRelics(state,empireId).some(r=>r.id===relicId);}
+function validateEquippedRelic(state,empireId){
+  const parts=relicStateParts(state),faction=parts.factions[empireId],equipped=faction&&faction.equippedRelic;
+  return equipped&&ownsRelic(parts,empireId,equipped)?equipped:null;
+}
+function dedupeRelicRewards(state){
+  const parts=relicStateParts(state),seen=new Set(),rewards=[];
+  for(const original of parts.monsterState.rewards||[]){
+    const relic=getRelicByReward(original),reward={...original,inert:true};
+    if(relic)reward.relicId=relic.id;
+    const key=relic&&reward.earnedBy?`${reward.earnedBy}:${relic.id}`:null;
+    if(key&&seen.has(key))continue;
+    if(key)seen.add(key);rewards.push(reward);
+  }
+  return rewards;
+}
+function migrateRelicState(state){
+  const parts=relicStateParts(state),monsterState={...parts.monsterState,rewards:dedupeRelicRewards(parts)};
+  const factions={};
+  for(const id in parts.factions)factions[id]={...parts.factions[id],equippedRelic:parts.factions[id].equippedRelic||null};
+  const migrated={monsterState,factions};
+  for(const id in factions)factions[id].equippedRelic=validateEquippedRelic(migrated,id);
+  return migrated;
+}
+
 function emptyMonsterState(){return{active:null,defeated:{},rewards:[]};}
 function getMonsterById(id){return MONSTERS[id]||null;}
 function getAvailableMonsters(state){
@@ -96,8 +174,9 @@ function createMonsterState(monsterId,territoryId,spawnRound,eraMedian){
 function getMonsterReward(monsterId,empireId,territoryId,earnedRound){
   const monster=getMonsterById(monsterId);
   if(!monster||!FACTIONS[empireId]||!TERR[territoryId])return null;
+  const relic=getRelicByMonster(monsterId);
   return{id:monster.reward.id,name:monster.reward.name,sourceMonster:monster.id,
-    earnedBy:empireId,earnedRound,sourceTerritory:territoryId,claimed:true,inert:true};
+    relicId:relic&&relic.id,earnedBy:empireId,earnedRound,sourceTerritory:territoryId,claimed:true,inert:true};
 }
 function migrateMonsterState(saved){
   if(!saved||typeof saved!=="object")return emptyMonsterState();

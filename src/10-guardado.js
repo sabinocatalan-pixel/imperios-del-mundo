@@ -10,9 +10,8 @@ function loadLegacy(code){
 }
 
 /* ==================== GUARDADO (Base64) ====================
-   v5 (Fase 3A): añade veteranía de sanador y asedio. migrateFactionToV5
-   conserva la migración de héroes v1-v3 y completa cualquier veteranía
-   parcial de v4 sin romper la partida guardada. */
+   v6 (Fase 3C): añade el slot de reliquia y normaliza las recompensas de
+   monstruos. Conserva las migraciones previas y acepta saves v1-v5. */
 function migrateFactionToV5(f){
   if(!f.heroes){
     f.heroes=[null,null,null];
@@ -30,7 +29,7 @@ function migrateFactionToV5(f){
 }
 function saveGame(){
   if(!player){return "";}
-  const data={v:5,T,Fx:F,player,round,diffMult,rel,humans,
+  const data={v:6,T,Fx:F,player,round,diffMult,rel,humans,
     pacts:pacts.map(p=>({a:p.a,b:p.b,type:p.type,rounds:p.rounds,coalition:!!p.coalition})),
     mis:missions.map(m=>m.done),leg:LEGACY,scn:scenario?scenario.id:null,
     coalition,coalitionCooldownUntil,eventHistory,warHistory,monsterState};
@@ -39,7 +38,7 @@ function saveGame(){
 function loadGame(code){
   try{
     const d=JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
-    if(![1,2,3,4,5].includes(d.v))throw 0;
+    if(![1,2,3,4,5,6].includes(d.v))throw 0;
     T=d.T;F=d.Fx;player=d.player;round=d.round;diffMult=d.diffMult;
     for(const fid in F)migrateFactionToV5(F[fid]);
     humans=d.humans||[d.player];turnIdx=0;pendingOffer=null;player=humans[0];
@@ -50,7 +49,8 @@ function loadGame(code){
       pacts.forEach(p=>{if(p.coalition)p.rounds=Math.min(p.rounds,coalition.rounds);});
     }
     eventHistory=d.eventHistory||[];warHistory=d.warHistory||[];
-    monsterState=migrateMonsterState(d.monsterState);
+    const relicState=migrateRelicState({monsterState:migrateMonsterState(d.monsterState),factions:F});
+    monsterState=relicState.monsterState;F=relicState.factions;
     missions=MISSION_DEFS.map((m,i)=>({...m,done:!!d.mis[i]}));
     if(d.leg){LEGACY.wins=d.leg.wins|0;LEGACY.hardWins=d.leg.hardWins|0;LEGACY.scen=d.leg.scen||{};LEGACY.heroes=d.leg.heroes||{};}
     scenario=d.scn?SCENARIOS.find(x=>x.id===d.scn)||null:null;
