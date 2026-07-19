@@ -1872,6 +1872,61 @@ test("Counters 3F-4: telemetría de matchups y estructuras", () => {
   }finally{closeGame(g);}
 });
 
+/* 48 (Fase 3D-1). Capacidad poblacional y validación de reclutamiento
+   disponibles como modelo puro, todavía sin alterar el botón real. */
+test("Recursos 3D-1: capacidad y reclutamiento estratégico declarativos", () => {
+  const g=makeGame();
+  try{
+    const cfg=JSON.parse(g.win.eval("JSON.stringify(STRATEGIC_RECRUITMENT)"));
+    assert.deepStrictEqual(cfg,{baseAmount:4,baseCost:{gold:12,food:5},maxPerEmpireTurn:2,
+      maxPerTerritoryTurn:1,localPopulationBonus:4,localBaseBonus:4});
+    g.win.eval(`T={
+      A:{owner:"AG",pop:10,troops:8,base:0},B:{owner:"AG",pop:12,troops:7,base:1},
+      C:{owner:"CO",pop:20,troops:6,base:3}};
+      F={AG:{gold:40,food:20},CO:{gold:40,food:20}};`);
+    assert.strictEqual(g.win.eval('getEmpirePopulationCapacity({T,F},"AG")'),22,"suma solo población propia");
+    assert.strictEqual(g.win.eval('getEmpireTroopsUsed({T,F},"AG")'),15,"suma solo tropas propias");
+    assert.strictEqual(g.win.eval('getEmpireAvailableCapacity({T,F},"AG")'),7);
+    assert.strictEqual(g.win.eval('getTerritoryTroopCapacity(T.A)'),14,"sin base: población + 4");
+    assert.strictEqual(g.win.eval('getTerritoryTroopCapacity(T.B)'),20,"base 1: población + 4 + 4");
+    assert.strictEqual(g.win.eval('getTerritoryTroopCapacity(T.C)'),36,"base 3: población + 4 + 12");
+    assert.strictEqual(g.win.eval('getTerritoryAvailableCapacity(T.A)'),6);
+    assert.strictEqual(g.win.eval('canRecruitStrategicTroops({T,F},"AG","A",4)'),true,"bajo capacidad puede reclutar");
+
+    const partial=JSON.parse(g.win.eval('JSON.stringify((()=>{T.A.troops=12;return recruitmentEvaluation({T,F},"AG","A",4)})())'));
+    assert.strictEqual(partial.actualAmount,2,"recluta solo los espacios locales disponibles");
+    assert.deepStrictEqual(partial.cost,{amount:2,gold:6,food:3},"coste parcial proporcional redondeado hacia arriba");
+    assert.deepStrictEqual(JSON.parse(g.win.eval('JSON.stringify(getRecruitmentCostForAmount(3))')),{amount:3,gold:9,food:4});
+
+    g.win.eval('T.A.troops=14');
+    assert.strictEqual(g.win.eval('canRecruitStrategicTroops({T,F},"AG","A",4)'),false);
+    assert.ok(g.win.eval('getRecruitmentBlockReason({T,F},"AG","A",4).includes("local")'));
+    g.win.eval('T.A.troops=8;T.B.troops=14');
+    assert.strictEqual(g.win.eval('getEmpireAvailableCapacity({T,F},"AG")'),0,"capacidad completa queda en cero");
+    assert.ok(g.win.eval('getRecruitmentBlockReason({T,F},"AG","A",4).includes("completa")'));
+    g.win.eval('T.B.troops=16');
+    assert.strictEqual(g.win.eval('getEmpireAvailableCapacity({T,F},"AG")'),0,"sobre capacidad no produce disponibilidad negativa");
+    assert.strictEqual(g.win.eval('getEmpireTroopsUsed({T,F},"AG")'),24,"no borra tropas existentes");
+    assert.ok(g.win.eval('getRecruitmentBlockReason({T,F},"AG","A",4).includes("sobre")'));
+
+    g.win.eval('T.B.troops=7');
+    const empireLimit=g.win.eval('getRecruitmentLimitState({T,F,recruitment:{byEmpire:{AG:2},byTerritory:{}}},"AG","A")');
+    assert.strictEqual(empireLimit.empireRecruitments,2);assert.strictEqual(empireLimit.maxRecruitable,0);
+    assert.ok(g.win.eval('getRecruitmentBlockReason({T,F,recruitment:{byEmpire:{AG:2},byTerritory:{}}},"AG","A",4).includes("2 reclutamientos")'));
+    const territoryLimit=g.win.eval('getRecruitmentLimitState({T,F,recruitmentState:{byEmpire:{AG:1},byTerritory:{A:1}}},"AG","A")');
+    assert.strictEqual(territoryLimit.territoryRecruitments,1);assert.strictEqual(territoryLimit.maxRecruitable,0);
+    assert.ok(g.win.eval('getRecruitmentBlockReason({T,F,recruitmentState:{byEmpire:{AG:1},byTerritory:{A:1}}},"AG","A",4).includes("ya reclutó")'));
+
+    // El reclutamiento real sigue intacto en 3D-1 y el save continúa en v6.
+    const panelSource=fs.readFileSync(path.join(__dirname,"..","src","06-paneles.js"),"utf8");
+    assert.ok(panelSource.includes('t.troops=Math.min(99,t.troops+4)'),"el botón real aún no consume el modelo");
+    g.win.eval('reset();startGame(1);clickTerr("CAN")');
+    const saved=g.win.eval('saveGame()'),decoded=JSON.parse(Buffer.from(saved,"base64").toString("utf8"));
+    assert.strictEqual(decoded.v,6,"sin estado persistente nuevo no cambia la versión del save");
+    assert.strictEqual(g.win.eval('loadGame('+JSON.stringify(saved)+')'),true,"el save actual conserva round-trip");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {
