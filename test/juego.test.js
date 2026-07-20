@@ -2105,6 +2105,51 @@ test("Recursos 3D-4: indicadores compactos y ayuda poblacional", () => {
   }finally{closeGame(g);}
 });
 
+/* 52 (Fase 3D-5). El Modo Balance observa capacidad, reclutamiento y
+   crecimiento mediante acumulados compactos, sin modificar la economia. */
+test("Recursos 3D-5: telemetria economica compacta y retrocompatible", () => {
+  const g=makeGame();
+  try{
+    g.win.eval('Math.random=()=>0.99;startGame(1);clickTerr("CAN");resetBalanceSession();F.AG.gold=100;F.AG.food=100');
+    const before=JSON.parse(g.win.eval(`JSON.stringify({gold:F.AG.gold,food:F.AG.food,pop:T.CAN.pop,troops:T.CAN.troops,
+      recruitment:STRATEGIC_RECRUITMENT,growth:POPULATION_GROWTH})`));
+
+    g.win.eval(`round=6;const reports=alive().map(fid=>({fid,growth:{paidSubsistence:ownedBy(fid).length,
+      growthCost:fid==="AG"?4:0,growth:fid==="AG"?1:0,scarcity:fid==="CO"}}));recordBalanceEconomicCycle(reports,round)`);
+    let view=JSON.parse(g.win.eval('JSON.stringify(balanceView(balanceSession))'));
+    const ag=view.economia3D.porImperio.AG;
+    assert.ok(ag.poblacionTotal>0&&ag.tropasUsadas>=0,"registra poblacion y tropas");
+    assert.strictEqual(typeof ag.capacidadDisponible,"number");assert.strictEqual(typeof ag.porcentajeCapacidadMedio,"number");
+    assert.ok(view.economia3D.rondasClave["6"],"registra expansion y diferencias en ronda clave");
+    assert.ok(view.economia3D.porImperio.CO.rondasEscasez>=1,"registra escasez sin crecimiento");
+    assert.ok(ag.subsistencia>0&&ag.comidaCrecimiento===4&&ag.crecimiento===1,"registra subsistencia y crecimiento");
+
+    g.win.eval(`recordBalanceStrategicRecruitment("AG",{ok:true,requestedAmount:4,actualAmount:2,cost:{gold:6,food:3},reason:""});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"Capacidad poblacional imperial completa."});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"Capacidad militar local completa."});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"Este territorio ya recluto durante el turno."});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"Limite de 2 reclutamientos alcanzado."});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"Falta oro."});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"Falta comida."});
+      recordBalanceStrategicRecruitment("AG",{ok:false,requestedAmount:4,actualAmount:0,cost:{gold:0,food:0},reason:"El imperio esta sobre su capacidad."})`);
+    view=JSON.parse(g.win.eval('JSON.stringify(balanceView(balanceSession))'));
+    const recruitment=view.economia3D.reclutamiento;
+    assert.strictEqual(recruitment.attempts,8);assert.strictEqual(recruitment.completed,1);assert.strictEqual(recruitment.partial,1);
+    assert.strictEqual(recruitment.goldSpent,6);assert.strictEqual(recruitment.foodSpent,3);
+    for(const cause of["capacidad_imperial","capacidad_local","territorio_usado","limite_imperial","falta_oro","falta_comida","sobre_capacidad"])
+      assert.strictEqual(recruitment.blocked[cause],1,`registra bloqueo ${cause}`);
+
+    const exported=JSON.parse(g.win.eval('exportBalanceJSON()'));
+    assert.ok(exported.partida.economia3D&&exported.acumulado.economia3D,"JSON exporta seccion economica");
+    const old=JSON.parse(g.win.eval('JSON.stringify(balanceView(normalizeBalanceData({battles:{count:0,durationTotal:0},games:{count:0,durationTotal:0}})))'));
+    assert.ok(old.economia3D&&old.economia3D.reclutamiento.attempts===0,"datos antiguos se normalizan");
+    g.win.eval('balanceBenchmarks(balanceSession)');
+    const after=JSON.parse(g.win.eval(`JSON.stringify({gold:F.AG.gold,food:F.AG.food,pop:T.CAN.pop,troops:T.CAN.troops,
+      recruitment:STRATEGIC_RECRUITMENT,growth:POPULATION_GROWTH})`));
+    assert.deepStrictEqual(after,before,"telemetria y advertencias no autoajustan ni cambian economia");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

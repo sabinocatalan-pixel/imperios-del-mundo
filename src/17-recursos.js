@@ -127,6 +127,7 @@ function getRecruitmentBlockReason(state,empireId,territoryId,amount=STRATEGIC_R
 }
 function applyStrategicRecruitment(state,empireId,territoryId,amount=STRATEGIC_RECRUITMENT.baseAmount){
   const evaluation=recruitmentEvaluation(state,empireId,territoryId,amount);
+  recordBalanceStrategicRecruitment(empireId,evaluation);
   if(!evaluation.ok)return{...evaluation,amount:0,partial:false};
   const territories=recruitmentTerritories(state),factions=recruitmentFactions(state),counters=recruitmentCounters(state);
   if(!counters.byEmpire)counters.byEmpire={};if(!counters.byTerritory)counters.byTerritory={};

@@ -50,6 +50,7 @@ function incomePhase(){
   }
   const growthReports=[];
   for(const fid of alive())growthReports.push({fid,growth:applyPopulationGrowth({T,F,growthBlockedTerritories},fid)});
+  recordBalanceEconomicCycle(growthReports,round);
   function growthSummaryMessage(fid,growth){
     const name=FACTIONS[fid].name;
     if(growth.scarcity)return`⚠ Escasez en ${name}: se consumieron ${growth.paidSubsistence}/${growth.subsistenceCost}🌾 y el crecimiento quedó detenido.`;

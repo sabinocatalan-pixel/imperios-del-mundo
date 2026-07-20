@@ -4,17 +4,33 @@ const BALANCE_KEY="IDM_BALANCE_V1";
 const BALANCE_SESSION_KEY="IDM_BALANCE_PARTIDA_V1";
 let balanceEnabled=false,balanceTitleTaps=0,balanceSession=null;
 
+function emptyEconomyBalance(){return{
+  empires:{},recruitment:{attempts:0,completed:0,partial:0,blocked:{},goldSpent:0,foodSpent:0,owners:{jugador:0,IA:0}},keyRounds:{}
+};}
 function emptyBalanceData(){return{
   battles:{count:0,durationTotal:0},units:{},heroes:{},damage:{},wins:{},
   games:{count:0,durationTotal:0},difficulty:{},events:{},duels:{},relics:{},relicEquipment:{},
-  matchups:{},structureDamage:{},unableToAttack:{},compositions:{}
+  matchups:{},structureDamage:{},unableToAttack:{},compositions:{},economy:emptyEconomyBalance()
 };}
+function normalizeEconomyBalance(value){
+  const economy=value&&typeof value==="object"?value:emptyEconomyBalance();
+  if(!economy.empires||typeof economy.empires!=="object")economy.empires={};
+  if(!economy.keyRounds||typeof economy.keyRounds!=="object")economy.keyRounds={};
+  if(!economy.recruitment||typeof economy.recruitment!=="object")economy.recruitment=emptyEconomyBalance().recruitment;
+  const recruitment=economy.recruitment;
+  for(const key of["attempts","completed","partial","goldSpent","foodSpent"])recruitment[key]=+recruitment[key]||0;
+  if(!recruitment.blocked||typeof recruitment.blocked!=="object")recruitment.blocked={};
+  if(!recruitment.owners||typeof recruitment.owners!=="object")recruitment.owners={jugador:0,IA:0};
+  recruitment.owners.jugador=+recruitment.owners.jugador||0;recruitment.owners.IA=+recruitment.owners.IA||0;
+  return economy;
+}
 function normalizeBalanceData(d){
   const b=d&&typeof d==="object"?d:emptyBalanceData();
   for(const k of["battles","units","heroes","damage","wins","games","difficulty","events","duels","relics","relicEquipment","matchups","structureDamage","unableToAttack","compositions"])
     if(!b[k]||typeof b[k]!=="object")b[k]=emptyBalanceData()[k];
   b.battles.count=b.battles.count|0;b.battles.durationTotal=+b.battles.durationTotal||0;
   b.games.count=b.games.count|0;b.games.durationTotal=+b.games.durationTotal||0;
+  b.economy=normalizeEconomyBalance(b.economy);
   return b;
 }
 function loadBalanceTotal(){try{return normalizeBalanceData(JSON.parse(localStorage.getItem(BALANCE_KEY)||"null"));}catch(e){return emptyBalanceData();}}
@@ -29,6 +45,64 @@ function battleCounterBox(b){
   return b.counterTelemetry;
 }
 function balanceOwner(fid){return humans.includes(fid)?"jugador":"IA";}
+function economicEmpireEntry(economy,fid){
+  const fields={samples:0,populationTotal:0,troopsTotal:0,availableTotal:0,capacityRatioTotal:0,rounds80:0,rounds100:0,
+    roundsOver:0,subsistenceFood:0,growthFood:0,populationGrowth:0,scarcityRounds:0,foodTotal:0,goldTotal:0,
+    territoriesTotal:0,currentOverStreak:0,maxOverStreak:0,playerSamples:0,aiSamples:0,firstFullRound:null};
+  const entry=economy.empires[fid]||(economy.empires[fid]={});
+  for(const[key,value]of Object.entries(fields))if(entry[key]===undefined)entry[key]=value;
+  return entry;
+}
+function economicMetrics(fid){
+  const state=currentStrategicRecruitmentState(),capacity=getEmpirePopulationCapacity(state,fid),troops=getEmpireTroopsUsed(state,fid);
+  const territories=ownedBy(fid),population=territories.reduce((n,id)=>n+(+T[id].pop||0),0),faction=F[fid]||{};
+  return{fid,owner:balanceOwner(fid),population,troops,capacity,available:capacity-troops,ratio:capacity?troops/capacity:0,
+    territories:territories.length,gold:+faction.gold||0,food:+faction.food||0};
+}
+function addEconomicRound(data,metrics,growth,sampleRound){
+  const economy=normalizeEconomyBalance(data.economy),entry=economicEmpireEntry(economy,metrics.fid);entry.samples++;
+  entry.populationTotal+=metrics.population;entry.troopsTotal+=metrics.troops;entry.availableTotal+=metrics.available;
+  entry.capacityRatioTotal+=metrics.ratio;entry.territoriesTotal+=metrics.territories;entry.goldTotal+=metrics.gold;entry.foodTotal+=metrics.food;
+  if(metrics.ratio>=.8)entry.rounds80++;if(metrics.ratio>=1)entry.rounds100++;if(metrics.ratio>1)entry.roundsOver++;
+  entry.currentOverStreak=metrics.ratio>1?entry.currentOverStreak+1:0;entry.maxOverStreak=Math.max(entry.maxOverStreak,entry.currentOverStreak);
+  entry[metrics.owner==="jugador"?"playerSamples":"aiSamples"]++;
+  if(metrics.ratio>=1&&entry.firstFullRound===null)entry.firstFullRound=sampleRound;
+  entry.subsistenceFood+=+growth.paidSubsistence||0;entry.growthFood+=+growth.growthCost||0;
+  entry.populationGrowth+=+growth.growth||0;if(growth.scarcity)entry.scarcityRounds++;
+}
+function averageEconomicSide(metrics){
+  if(!metrics.length)return{capacity:0,troops:0,gold:0,food:0,territories:0};
+  return Object.fromEntries(["capacity","troops","gold","food","territories"].map(key=>[key,metrics.reduce((n,x)=>n+x[key],0)/metrics.length]));
+}
+function addEconomicKeyRound(data,sampleRound,metrics){
+  if(![1,3,6,10].includes(sampleRound))return;
+  const key=String(sampleRound),entry=data.economy.keyRounds[key]||(data.economy.keyRounds[key]={samples:0,player:{},ai:{}});
+  const playerSide=averageEconomicSide(metrics.filter(x=>x.owner==="jugador")),aiSide=averageEconomicSide(metrics.filter(x=>x.owner==="IA"));
+  entry.samples++;for(const side of["player","ai"]){const source=side==="player"?playerSide:aiSide;
+    for(const field of["capacity","troops","gold","food","territories"])entry[side][field]=(entry[side][field]||0)+source[field];}
+}
+function recordBalanceEconomicCycle(reports,sampleRound=round){
+  if(!balanceSession)return;const metrics=(reports||[]).map(report=>economicMetrics(report.fid)),total=loadBalanceTotal();
+  for(const data of[balanceSession,total]){for(const report of reports||[]){const metric=metrics.find(x=>x.fid===report.fid);if(metric)addEconomicRound(data,metric,report.growth||{},sampleRound);}
+    addEconomicKeyRound(data,sampleRound,metrics);}
+  saveBalanceSession();saveBalanceTotal(total);
+}
+function recruitmentBlockKey(reason=""){
+  const value=reason.toLowerCase();if(value.includes("sobre")&&value.includes("capacidad"))return"sobre_capacidad";
+  if(value.includes("poblacional imperial"))return"capacidad_imperial";if(value.includes("militar local"))return"capacidad_local";
+  if(value.includes("ya reclut"))return"territorio_usado";if(value.includes("mite de 2"))return"limite_imperial";
+  if(value.includes("oro"))return"falta_oro";if(value.includes("comida"))return"falta_comida";return"otro";
+}
+function addRecruitmentTelemetry(data,fid,evaluation){
+  const entry=normalizeEconomyBalance(data.economy).recruitment;entry.attempts++;entry.owners[balanceOwner(fid)]++;
+  if(evaluation.ok){entry.completed++;if(evaluation.actualAmount<evaluation.requestedAmount)entry.partial++;
+    entry.goldSpent+=+evaluation.cost.gold||0;entry.foodSpent+=+evaluation.cost.food||0;}
+  else{const cause=recruitmentBlockKey(evaluation.reason);entry.blocked[cause]=(entry.blocked[cause]||0)+1;}
+}
+function recordBalanceStrategicRecruitment(fid,evaluation){
+  if(!balanceSession)return;const total=loadBalanceTotal();addRecruitmentTelemetry(balanceSession,fid,evaluation);addRecruitmentTelemetry(total,fid,evaluation);
+  saveBalanceSession();saveBalanceTotal(total);
+}
 function recordBattleCounterHit(b,att,def,mult,damage,killed=false){
   if(!b||b.mode==="boss"||(att.kind==="champ"&&def.kind==="champ"))return false;
   const attackerKind=normalizedCounterKind(att.kind),defenderKind=normalizedCounterKind(def.kind),key=`${attackerKind}→${defenderKind}`;
@@ -146,6 +220,17 @@ function balanceView(data){
   const rates=box=>Object.fromEntries(Object.entries(box).map(([k,v])=>[k,{uso:v.uses,tasaVictoria:v.uses?+(v.wins/v.uses).toFixed(3):0}]));
   const structureKinds=[...COUNTER_TYPES,"hero"],structureView=Object.fromEntries(structureKinds.map(kind=>{const x=data.structureDamage[kind]||{attacks:0,damage:0,owners:{jugador:0,IA:0},relics:{}};
     return[kind,{ataques:x.attacks,danoTotal:+x.damage.toFixed(2),danoPromedio:x.attacks?+(x.damage/x.attacks).toFixed(2):0,propietarios:x.owners,reliquias:x.relics}];}));
+  const economy=normalizeEconomyBalance(data.economy),economicEmpires=Object.fromEntries(Object.entries(economy.empires).map(([fid,x])=>[fid,{
+    muestras:x.samples,poblacionTotal:x.populationTotal,tropasUsadas:x.troopsTotal,capacidadDisponible:x.availableTotal,
+    porcentajeCapacidadMedio:x.samples?+(x.capacityRatioTotal/x.samples).toFixed(3):0,rondas80:x.rounds80,rondas100:x.rounds100,
+    rondasSobreCapacidad:x.roundsOver,rachaMaximaSobreCapacidad:x.maxOverStreak,subsistencia:x.subsistenceFood,
+    comidaCrecimiento:x.growthFood,crecimiento:x.populationGrowth,rondasEscasez:x.scarcityRounds,
+    comidaMedia:x.samples?+(x.foodTotal/x.samples).toFixed(2):0,oroMedio:x.samples?+(x.goldTotal/x.samples).toFixed(2):0,
+    territoriosMedios:x.samples?+(x.territoriesTotal/x.samples).toFixed(2):0,primeraRondaLlena:x.firstFullRound,
+    muestrasJugador:x.playerSamples,muestrasIA:x.aiSamples}]));
+  const keyRounds=Object.fromEntries(Object.entries(economy.keyRounds).map(([key,x])=>[key,{muestras:x.samples,
+    jugador:Object.fromEntries(Object.entries(x.player||{}).map(([k,v])=>[k,x.samples?+(v/x.samples).toFixed(2):0])),
+    mediaIA:Object.fromEntries(Object.entries(x.ai||{}).map(([k,v])=>[k,x.samples?+(v/x.samples).toFixed(2):0]))}]));
   return{
     duracionMediaBatalla:data.battles.count?+(data.battles.durationTotal/data.battles.count).toFixed(2):0,
     batallas:data.battles.count,unidades:rates(data.units),heroes:rates(data.heroes),
@@ -160,6 +245,8 @@ function balanceView(data){
       propietariosAtacante:x.attackerOwners,propietariosDefensor:x.defenderOwners,reliquias:x.relics}])),
     danoEstructurasPorTipo:structureView,
     unidadesSinObjetivo:data.unableToAttack,composiciones:rates(data.compositions),
+    economia3D:{porImperio:economicEmpires,reclutamiento:{...economy.recruitment,
+      tasaBloqueo:economy.recruitment.attempts?+(Object.values(economy.recruitment.blocked).reduce((n,v)=>n+v,0)/economy.recruitment.attempts).toFixed(3):0},rondasClave:keyRounds},
     reliquias:Object.fromEntries(Object.entries(data.relics).map(([id,x])=>[id,{usos:x.uses,
       tasaVictoria:x.uses?+(x.wins/x.uses).toFixed(3):0,resultados:{victorias:x.wins,derrotas:x.losses,retiradas:x.retreats},
       propietarios:x.owners,contextos:x.contexts}]))
@@ -183,6 +270,17 @@ function balanceBenchmarks(data){
     heavy.resultados.victoria/(heavy.resultados.victoria+heavy.resultados.derrota+heavy.resultados.retirada)>=0.65)reports.push("Pesada parece dominar contra melee");
   const siege=v.danoEstructurasPorTipo.siege;if(siege&&siege.ataques>=10&&siege.danoTotal<=0)reports.push("Asedio no logra daño estructural");
   for(const[key,x]of Object.entries(v.unidadesSinObjetivo))if(x.uses>=5)reports.push(`${key} acumula ${x.uses} usos sin poder atacar ese tipo`);
+  const economy=v.economia3D,recruitment=economy.reclutamiento,round6=economy.rondasClave["6"];
+  if(round6&&round6.muestras>=1&&round6.mediaIA.capacity>0&&round6.jugador.capacity>round6.mediaIA.capacity*1.4)reports.push("Jugador supera 40% la capacidad media IA en ronda 6");
+  if(round6&&round6.muestras>=1&&round6.mediaIA.troops>0&&round6.jugador.troops>round6.mediaIA.troops*1.4)reports.push("Jugador supera 40% las tropas medias IA en ronda 6");
+  if(recruitment.attempts>=20&&recruitment.tasaBloqueo>.25)reports.push("Mas de 25% de intentos de reclutamiento quedan bloqueados");
+  for(const[fid,x]of Object.entries(economy.porImperio)){
+    if(x.muestras>=6&&x.comidaMedia>=100&&x.comidaCrecimiento/x.muestras<2)reports.push(`${fid} acumula comida con poco crecimiento`);
+    if(x.muestras>=6&&x.rondasEscasez/x.muestras>=.4)reports.push(`${fid} sufre escasez frecuente`);
+    if(x.muestrasIA&&x.rachaMaximaSobreCapacidad>=3)reports.push(`${fid} IA permanece sobre capacidad durante 3 rondas`);
+    if(x.muestrasJugador&&x.primeraRondaLlena!==null&&x.primeraRondaLlena<=3)reports.push(`${fid} jugador alcanza capacidad completa demasiado temprano`);
+  }
+  if(v.partidas>=5&&v.duracionMediaPartida>690)reports.push("Duracion media de partida supera 15% el objetivo de 10 minutos");
   return reports;
 }
 function exportBalanceJSON(){
