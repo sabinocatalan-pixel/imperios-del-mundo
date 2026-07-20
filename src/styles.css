@@ -27,6 +27,10 @@
     padding:6px 8px;font-size:12.5px}
   .res{background:rgba(8,16,22,.7);border:1px solid var(--line);padding:4px 9px;border-radius:4px;white-space:nowrap}
   .res b{color:var(--gold)}
+  .capacityIndicator.capacityNormal{border-color:var(--ok)}
+  .capacityIndicator.capacityWarn{border-color:var(--gold);background:rgba(217,164,65,.16)}
+  .capacityIndicator.capacityFull{border-color:var(--danger);background:rgba(198,61,47,.2)}
+  .capacityIndicator.capacityFull b{color:#F08C80}
   #status{width:100%;max-width:1080px;padding:5px 14px;text-align:center;font-size:13.5px;min-height:30px;line-height:1.35}
   #status strong{color:var(--gold)}
   #worldBanner{display:none;position:fixed;inset:0;z-index:80;align-items:center;justify-content:center;pointer-events:none;background:rgba(5,14,19,.38)}
@@ -168,6 +172,10 @@
   .relicCard small,.relicPending,.relicEmpty{opacity:.72}
   .relicPending,.relicEmpty{margin-top:6px}
   .relicChangeNote{font-size:11px;opacity:.75;padding:4px 2px}
+  .populationSummary{display:grid;gap:2px;margin:6px 0;padding:7px 8px;border:1px solid var(--line);border-radius:6px;
+    background:rgba(233,220,192,.04);font-size:11px;line-height:1.35}
+  .populationSummary b{color:var(--gold)}
+  .populationSummary span{opacity:.82}
   /* ===== RESUMEN DEL TURNO ===== */
   .resumenLinea{border-left:3px solid var(--gold);padding:9px 11px;margin-bottom:8px;
     font-size:15px;line-height:1.4;background:rgba(233,220,192,.05);border-radius:0 4px 4px 0}

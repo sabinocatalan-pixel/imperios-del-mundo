@@ -48,15 +48,26 @@ function incomePhase(){
       if(t.plague===0)log(`La plaga terminó en ${TERR[id].n}.`);
     }
   }
-  for(const fid of alive()){
-    const growth=applyPopulationGrowth({T,F,growthBlockedTerritories},fid),name=FACTIONS[fid].name;
-    if(growth.scarcity)logCausal(`⚠ Escasez en ${name}: se consumieron ${growth.paidSubsistence}/${growth.subsistenceCost}🌾 y el crecimiento quedó detenido.`,"loss");
-    else{
-      let msg=`🌾 Subsistencia de ${name}: −${growth.subsistenceCost} comida.`;
-      if(growth.growth)msg+=` 👥 Crecimiento poblacional: +${growth.growth} por ${growth.growthCost} comida.`;
-      if(growth.cappedTerritories)msg+=" 👥 Algunos territorios alcanzaron el tope poblacional.";
-      logCausal(msg);
-    }
+  const growthReports=[];
+  for(const fid of alive())growthReports.push({fid,growth:applyPopulationGrowth({T,F,growthBlockedTerritories},fid)});
+  function growthSummaryMessage(fid,growth){
+    const name=FACTIONS[fid].name;
+    if(growth.scarcity)return`⚠ Escasez en ${name}: se consumieron ${growth.paidSubsistence}/${growth.subsistenceCost}🌾 y el crecimiento quedó detenido.`;
+    let msg=`🌾 Subsistencia de ${name}: −${growth.subsistenceCost} comida.`;
+    if(growth.growth)msg+=` 👥 Crecimiento poblacional: +${growth.growth} por ${growth.growthCost} comida.`;
+    if(growth.cappedTerritories)msg+=" 👥 Algunos territorios alcanzaron el tope poblacional.";
+    return msg;
+  }
+  for(const report of growthReports.filter(x=>humans.includes(x.fid)))
+    logCausal(growthSummaryMessage(report.fid,report.growth),report.growth.scarcity?"loss":"");
+  const aiGrowth=growthReports.filter(x=>!humans.includes(x.fid));
+  if(aiGrowth.length){
+    const subsistence=aiGrowth.reduce((n,x)=>n+x.growth.paidSubsistence,0),growth=aiGrowth.reduce((n,x)=>n+x.growth.growth,0);
+    const scarcity=aiGrowth.filter(x=>x.growth.scarcity).length,capped=aiGrowth.reduce((n,x)=>n+x.growth.cappedTerritories,0);
+    let msg=`🌾 Imperios IA: subsistencia −${subsistence} comida · crecimiento +${growth}.`;
+    if(scarcity)msg+=` ⚠ ${scarcity} ${scarcity===1?"imperio quedó":"imperios quedaron"} sin crecimiento por escasez.`;
+    if(capped)msg+=" 👥 Hay territorios en el tope poblacional.";
+    logCausal(msg,scarcity?"loss":"");
   }
   const plagueBase=0.07*(scenario&&scenario.plagueX?scenario.plagueX:1);
   {const ids=Object.keys(T),v=ids[Math.floor(Math.random()*ids.length)];

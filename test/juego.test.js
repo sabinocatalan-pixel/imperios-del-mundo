@@ -2047,6 +2047,64 @@ test("Recursos 3D-3: subsistencia y crecimiento poblacional limitado", () => {
   }finally{closeGame(g);}
 });
 
+/* 51 (Fase 3D-4). La UI explica capacidad, reclutamiento y crecimiento sin
+   modificar las fórmulas económicas ni saturar el Resumen. */
+test("Recursos 3D-4: indicadores compactos y ayuda poblacional", () => {
+  const g=makeGame();
+  try{
+    g.win.eval('Math.random=()=>0.99;startGame(1);clickTerr("CAN");F.AG.gold=100;F.AG.food=100;render()');
+    let indicator=g.doc.querySelector(".capacityIndicator");
+    const used=g.win.eval('getEmpireTroopsUsed(currentStrategicRecruitmentState(),"AG")');
+    const capacity=g.win.eval('getEmpirePopulationCapacity(currentStrategicRecruitmentState(),"AG")');
+    assert.ok(indicator&&indicator.textContent.includes(`${used}/${capacity}`),"barra muestra usada/capacidad");
+    assert.ok(indicator.classList.contains("capacityNormal"));
+    assert.ok(indicator.title.includes(`Tropas usadas ${used}`)&&indicator.getAttribute("aria-label").includes(`Capacidad poblacional ${capacity}`));
+
+    g.win.eval(`(()=>{const ids=ownedBy("AG"),cap=getEmpirePopulationCapacity(currentStrategicRecruitmentState(),"AG"),target=Math.ceil(cap*0.8);
+      ids.forEach(id=>T[id].troops=1);T[ids[0]].troops=target-(ids.length-1);render()})()`);
+    indicator=g.doc.querySelector(".capacityIndicator");assert.ok(indicator.classList.contains("capacityWarn"),"80% muestra advertencia");
+    g.win.eval('ownedBy("AG").forEach(id=>T[id].troops=T[id].pop);render()');
+    indicator=g.doc.querySelector(".capacityIndicator");assert.ok(indicator.classList.contains("capacityFull"),"100% muestra lleno");
+
+    g.win.eval('ownedBy("AG").forEach(id=>T[id].troops=1);recruitmentState=emptyRecruitmentState(round);selected="CAN";render()');
+    const localCap=g.win.eval('getTerritoryTroopCapacity(T.CAN)');
+    assert.ok(g.doc.getElementById("terrInfo").textContent.includes(`Tropas: 1/${localCap}`));
+    assert.ok(g.doc.getElementById("terrInfo").textContent.includes(`Población: ${g.win.eval("T.CAN.pop")}`));
+    let recruit=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(recruit.textContent.includes("Reclutar +4 · 12")&&recruit.textContent.includes("5"),"muestra coste completo compacto");
+    assert.strictEqual(recruit.title,recruit.textContent);assert.strictEqual(recruit.getAttribute("aria-label"),recruit.textContent);
+
+    g.win.eval('T.CAN.troops=getTerritoryTroopCapacity(T.CAN)-2;render()');
+    recruit=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(recruit.textContent.includes("parcial +2")&&recruit.textContent.includes("6")&&recruit.textContent.includes("3"));
+
+    g.win.eval('ownedBy("AG").forEach(id=>T[id].troops=T[id].pop);render()');
+    recruit=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(recruit.textContent.includes("Capacidad poblacional imperial completa"));
+    g.win.eval('ownedBy("AG").forEach(id=>T[id].troops=1);T.CAN.troops=getTerritoryTroopCapacity(T.CAN);render()');
+    recruit=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(recruit.textContent.includes("Capacidad militar local completa"));
+    g.win.eval('T.CAN.troops=1;recruitmentState.byTerritory.CAN=1;render()');
+    recruit=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(recruit.textContent.includes("ya reclutó"));
+    g.win.eval('recruitmentState.byTerritory={};recruitmentState.byEmpire.AG=2;render()');
+    recruit=Array.from(g.doc.querySelectorAll("#terrBtns button")).find(b=>b.textContent.includes("Reclutar"));
+    assert.ok(recruit.textContent.includes("Límite de 2 reclutamientos"));
+
+    const empireText=g.doc.getElementById("empInfo").textContent;
+    for(const text of["Población militar","Disponible:","Reclutamiento: 2/2","Subsistencia:","Crecimiento posible:"])
+      assert.ok(empireText.includes(text),`panel Imperio incluye ${text}`);
+
+    const help=g.doc.getElementById("quickHelp").textContent;
+    for(const text of["Recursos y población","cada tropa ocupa 1","capacidad local","bases la aumentan","consume 1 comida","crecer +1 cuesta 4","tampoco pérdida automática","unidades visuales de batalla no consumen"])
+      assert.ok(help.includes(text),`Ayuda explica: ${text}`);
+
+    g.win.eval('turnSummaryLines=[];incomePhase()');
+    assert.ok(g.win.eval('turnSummaryLines.some(x=>x.m.includes("Imperios IA"))'),"agrupa economía IA");
+    assert.ok(g.win.eval('turnSummaryLines.length<=humans.filter(h=>alive().includes(h)).length+1'),"máximo una línea por humano y una agregada IA");
+  }finally{closeGame(g);}
+});
+
 async function main() {
   let pass = 0, fail = 0;
   for (const t of tests) {

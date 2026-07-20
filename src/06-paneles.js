@@ -15,20 +15,25 @@ function render(){
 }
 function renderRes(){
   if(!player){$("resbar").innerHTML="";return;}
-  const f=F[player];
+  const f=F[player],state=currentStrategicRecruitmentState();
+  const used=getEmpireTroopsUsed(state,player),capacity=getEmpirePopulationCapacity(state,player);
+  const ratio=capacity?used/capacity:1,capacityClass=ratio>=1?"capacityFull":ratio>=0.8?"capacityWarn":"capacityNormal";
+  const capacityText=`Tropas usadas ${used} · Capacidad poblacional ${capacity}`;
   $("resbar").innerHTML=
    `<span class="res">🪙 <b>${f.gold}</b></span><span class="res">🌾 <b>${f.food}</b></span>
     <span class="res">🔬 <b>${f.science}</b></span><span class="res">✨ <b>${f.faith}</b>/${FAITH_WIN}</span>
     <span class="res">🎭 <b>${f.culture}</b>/${CULT_WIN}</span>
-    <span class="res">🏛 <b>${ERAS[f.era]}</b></span><span class="res">Ronda <b>${round}</b></span>`;
+    <span class="res">🏛 <b>${ERAS[f.era]}</b></span><span class="res capacityIndicator ${capacityClass}" title="${capacityText}" aria-label="${capacityText}">👥 <b>${used}/${capacity}</b></span>
+    <span class="res">Ronda <b>${round}</b></span>`;
 }
 function renderTerr(){
   const info=$("terrInfo"),btns=$("terrBtns"),title=$("terrTitle");btns.innerHTML="";
   if(!selected){title.textContent="Territorio";info.textContent="Selecciona un territorio.";return;}
   const t=T[selected],d=TERR[selected],mine=t.owner===player;
   title.textContent=mine?"Territorio":"Territorio · Diplomacia";
+  const localCapacity=getTerritoryTroopCapacity(t);
   let h=`<div class="row"><span><b>${d.n}</b> — ${FACTIONS[t.owner].name}</span></div>
-    <div class="row"><span>⚔ Tropas: ${t.troops}</span><span>👥 Población: ${t.pop}</span></div>
+    <div class="row"><span>⚔ Tropas: ${t.troops}/${localCapacity}</span><span>👥 Población: ${t.pop}</span></div>
     <div class="row"><span>🏰 Base nv${t.base}</span><span>Recurso: ${RESICON[d.res]} ${d.res}</span></div>
     <div class="row"><span>☣ ${t.plague>0?"Plaga ("+t.plague+")":"Sin enfermedad"}</span></div>
     ${getMonsterTerritoryPanelHtml(selected)}`;
@@ -51,7 +56,7 @@ function renderTerr(){
     const recruitment=recruitmentEvaluation(currentStrategicRecruitmentState(),player,selected);
     const partial=recruitment.ok&&recruitment.actualAmount<STRATEGIC_RECRUITMENT.baseAmount;
     const recLabel=recruitment.ok
-      ?`Reclutar ${partial?"parcial ":""}+${recruitment.actualAmount} (${recruitment.cost.gold}🪙 ${recruitment.cost.food}🌾)`
+      ?`Reclutar ${partial?"parcial ":""}+${recruitment.actualAmount} · ${recruitment.cost.gold}🪙 ${recruitment.cost.food}🌾`
       :`Reclutar · ${recruitment.reason}`;
     const rec=mkBtn(recLabel,()=>{
       const result=applyStrategicRecruitment(currentStrategicRecruitmentState(),player,selected);
@@ -59,9 +64,8 @@ function renderTerr(){
       SFX.spawn();log(`${result.partial?"Reclutamiento parcial":"Reclutamiento"}: +${result.amount} tropas en ${d.n} (${result.cost.gold}🪙 ${result.cost.food}🌾).`);
       render();
     },!recruitment.ok);
+    rec.title=recLabel;rec.setAttribute("aria-label",recLabel);
     btns.appendChild(rec);
-    if(!recruitment.ok){const note=document.createElement("div");note.className="relicChangeNote";
-      note.textContent=recruitment.reason;btns.appendChild(note);}
     if(t.base<3){
       const c=30+t.base*25;
       btns.appendChild(mkBtn(`Base → nv${t.base+1} (${c}🪙)`,()=>{f.gold-=c;t.base++;
@@ -109,7 +113,10 @@ function renderRelicPanel(fid){
 function renderEmp(){
   const info=$("empInfo"),btns=$("empBtns");btns.innerHTML="";
   if(!player){info.textContent="";return;}
-  const f=F[player],own=ownedBy(player);
+  const f=F[player],own=ownedBy(player),strategicState=currentStrategicRecruitmentState();
+  const troopsUsed=getEmpireTroopsUsed(strategicState,player),populationCapacity=getEmpirePopulationCapacity(strategicState,player);
+  const available=getEmpireAvailableCapacity(strategicState,player),recruitsUsed=safeStrategicInteger(recruitmentState.byEmpire[player]);
+  const growthPlan=getPopulationGrowthPlan({T,F},player);
   let contHtml="";
   for(const cn in CONTINENTS){
     const c=CONTINENTS[cn];
@@ -123,6 +130,11 @@ function renderEmp(){
       <span>${activeHero?("⭐ "+activeHero.name+" (arma nv"+f.heroWeaponLv+")"):"Sin héroe activo"}</span></div>
     ${councilNames?`<div class="row" style="opacity:.75">Consejo: ${councilNames}</div>`:""}
     <div class="row" style="opacity:.75">⚔️ Armamento nv${f.upArm} · 💰 Economía nv${f.upEco} · 🏥 Medicina nv${f.upMed}</div>
+    <section class="populationSummary" aria-label="Resumen de población y reclutamiento">
+      <b>👥 Población militar: ${troopsUsed}/${populationCapacity}</b>
+      <span>Disponible: ${available} · Reclutamiento: ${recruitsUsed}/${STRATEGIC_RECRUITMENT.maxPerEmpireTurn}</span>
+      <span>Subsistencia: ${growthPlan.subsistenceCost}🌾 · Crecimiento posible: +${growthPlan.growth}/${growthPlan.maxSlots}</span>
+    </section>
     ${coalition&&coalition.leader===player?`<div class="row" style="color:var(--danger)"><b>🌍 Coalición en tu contra: ${coalition.rounds} rondas</b></div>`:""}
     ${contHtml}
     ${renderRelicPanel(player)}
